@@ -18,7 +18,7 @@ import logging
 import sys
 from pathlib import Path
 
-from lib import XmlToMdConverter, download_rfc, normalize_rfc_number, setup_logging
+from lib import XmlToMdConverter, download_rfc, download_rfc_recursive, normalize_rfc_number, setup_logging
 
 
 def parse_arguments():
@@ -61,6 +61,19 @@ Examples:
         "--output", type=str, help="Custom output filename for the Markdown file (optional)"
     )
 
+    # Recursive download options
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recursively download all RFCs referenced in the specified RFC",
+    )
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=1,
+        help="Maximum recursion depth for --recursive (default: 1)",
+    )
+
     # Logging options
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
@@ -69,6 +82,9 @@ Examples:
     # Validate arguments
     if args.pdf and args.file:
         parser.error("--pdf can only be used with --rfc, not with --file")
+
+    if args.recursive and args.file:
+        parser.error("--recursive can only be used with --rfc, not with --file")
 
     return args
 
@@ -93,45 +109,113 @@ def main():
         rfc_number = normalize_rfc_number(args.rfc)
         logger.info(f"Processing RFC: {rfc_number}")
 
-        # Download RFC files
-        xml_file = download_rfc(rfc_number, output_dir, fetch_pdf=args.pdf)
-        if xml_file is None:
-            logger.error("Failed to download RFC")
-            sys.exit(1)
+        # Check if recursive download is requested
+        if args.recursive:
+            logger.info(
+                f"Starting recursive download for RFC {rfc_number} with max depth {args.max_depth}"
+            )
+            rfc_files = download_rfc_recursive(
+                rfc_number, output_dir, args.pdf, args.max_depth
+            )
 
-        logger.info(f"Using downloaded file: {xml_file}")
+            if not rfc_files:
+                logger.error("Failed to download any RFCs")
+                sys.exit(1)
+
+            logger.info(f"Downloaded {len(rfc_files)} RFC(s), starting conversion...")
+
+            # Convert all downloaded RFCs
+            success_count = 0
+            total_count = len(rfc_files)
+
+            for rfc_num in sorted(rfc_files.keys()):
+                xml_file = rfc_files[rfc_num]
+                output_file = output_dir / f"{rfc_num}.md"
+
+                try:
+                    logger.info(f"Converting {rfc_num} to Markdown...")
+                    converter = XmlToMdConverter(xml_file)
+                    markdown_content = converter.convert()
+
+                    # Write Markdown to file
+                    with open(output_file, "w", encoding="utf-8") as f:
+                        f.write(markdown_content)
+
+                    logger.info(f"Successfully converted {rfc_num} to Markdown")
+                    success_count += 1
+
+                except Exception as e:
+                    logger.error(f"Error converting {rfc_num}: {e}", exc_info=args.debug)
+
+            logger.info(
+                f"Conversion complete: {success_count}/{total_count} RFCs converted successfully"
+            )
+
+            if success_count == 0:
+                sys.exit(1)
+
+        else:
+            # Non-recursive download (original behavior)
+            xml_file = download_rfc(rfc_number, output_dir, fetch_pdf=args.pdf)
+            if xml_file is None:
+                logger.error("Failed to download RFC")
+                sys.exit(1)
+
+            logger.info(f"Using downloaded file: {xml_file}")
+
+            # Determine output filename
+            if args.output:
+                output_file = output_dir / args.output
+            else:
+                output_file = output_dir / f"{rfc_number}.md"
+
+            logger.info(f"Output file will be: {output_file.absolute()}")
+
+            # Convert XML to Markdown
+            try:
+                converter = XmlToMdConverter(xml_file)
+                markdown_content = converter.convert()
+
+                # Write Markdown to file
+                with open(output_file, "w", encoding="utf-8") as f:
+                    f.write(markdown_content)
+
+                logger.info(f"Successfully converted to Markdown: {output_file}")
+
+            except Exception as e:
+                logger.error(f"Error during conversion: {e}", exc_info=True)
+                sys.exit(1)
+
     else:
+        # Process local file
         xml_file = Path(args.file)
         if not xml_file.exists():
             logger.error(f"File not found: {xml_file}")
             sys.exit(1)
         logger.info(f"Processing local file: {xml_file.absolute()}")
 
-    # Determine output filename
-    if args.output:
-        output_file = output_dir / args.output
-    elif args.rfc:
-        rfc_number = normalize_rfc_number(args.rfc)
-        output_file = output_dir / f"{rfc_number}.md"
-    else:
-        output_file = output_dir / f"{xml_file.stem}.md"
+        # Determine output filename
+        if args.output:
+            output_file = output_dir / args.output
+        else:
+            output_file = output_dir / f"{xml_file.stem}.md"
 
-    logger.info(f"Output file will be: {output_file.absolute()}")
+        logger.info(f"Output file will be: {output_file.absolute()}")
 
-    # Convert XML to Markdown
-    try:
-        converter = XmlToMdConverter(xml_file)
-        markdown_content = converter.convert()
+        # Convert XML to Markdown
+        try:
+            converter = XmlToMdConverter(xml_file)
+            markdown_content = converter.convert()
 
-        # Write Markdown to file
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(markdown_content)
+            # Write Markdown to file
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
 
-        logger.info(f"Successfully converted to Markdown: {output_file}")
+            logger.info(f"Successfully converted to Markdown: {output_file}")
 
-    except Exception as e:
-        logger.error(f"Error during conversion: {e}", exc_info=True)
-        sys.exit(1)
+        except Exception as e:
+            logger.error(f"Error during conversion: {e}", exc_info=True)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

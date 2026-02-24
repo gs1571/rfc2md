@@ -5,6 +5,7 @@ A Python tool to convert RFC (Request for Comments) documents from XML format to
 ## Features
 
 - **Fetch RFCs**: Download RFC documents directly from rfc-editor.org by RFC number
+- **Recursive RFC Download**: Automatically download all referenced RFCs
 - **Local Files**: Convert local RFC XML files
 - **PDF Download**: Optionally download PDF versions alongside XML
 - **Complete Conversion**: Preserves document structure including:
@@ -59,6 +60,29 @@ Convert a local RFC XML file:
 python3 rfc2md.py --file path/to/rfc9514.xml
 ```
 
+### Recursive Download
+
+Recursively download all RFCs referenced in the specified RFC:
+
+```bash
+# Recursive download with default depth (1 level)
+python3 rfc2md.py --rfc 9514 --recursive
+```
+
+With custom recursion depth:
+
+```bash
+# Recursive download with depth 2
+python3 rfc2md.py --rfc 9514 --recursive --max-depth 2
+```
+
+With PDF download:
+
+```bash
+# Recursive download with PDF
+python3 rfc2md.py --rfc 9514 --recursive --pdf --output-dir downloads
+```
+
 ### Download PDF
 
 Download the PDF version alongside the XML:
@@ -97,6 +121,12 @@ python3 rfc2md.py --rfc 9514 --debug
 # Download RFC 9514 with PDF to downloads directory
 python3 rfc2md.py --rfc RFC9514 --pdf --output-dir downloads
 
+# Download RFC 9514 and all its references recursively
+python3 rfc2md.py --rfc 9514 --recursive --output-dir output
+
+# Recursive download with depth 2 and debug logging
+python3 rfc2md.py --rfc 9514 --recursive --max-depth 2 --debug
+
 # Convert local file with custom output name
 python3 rfc2md.py --file examples/rfc9514.xml --output output/my-rfc.md
 
@@ -121,6 +151,7 @@ The converter generates GitHub Flavored Markdown (GFM) for maximum compatibility
 - Only supports RFC XML v3 format
 - Some complex table layouts may require manual adjustment
 - Nested structures beyond 6 levels are flattened to level 6 (Markdown limitation)
+- Recursive download respects already downloaded files (skips re-download but always reconverts)
 
 ## Project Structure
 
@@ -213,10 +244,12 @@ The converter is organized into modular components:
 
 **lib/downloader.py** - RFC download functionality:
 - `download_rfc()`: Fetch XML and PDF files from rfc-editor.org
+- `download_rfc_recursive()`: Recursively download referenced RFCs
 
 **lib/utils.py** - Utility functions:
 - `setup_logging()`: Configure logging
 - `normalize_rfc_number()`: Normalize RFC number input
+- `extract_rfc_references()`: Extract RFC references from XML files
 
 ## Contributing
 

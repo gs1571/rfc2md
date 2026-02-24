@@ -6,8 +6,11 @@ This module handles downloading RFC documents from rfc-editor.org.
 
 import logging
 import time
+from pathlib import Path
 
 import requests
+
+from lib.utils import extract_rfc_references, normalize_rfc_number
 
 
 def download_rfc(rfc_number, output_dir, fetch_pdf=False):
@@ -148,3 +151,84 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
             logger.warning(f"Error writing PDF file {pdf_file}: {e}")
 
     return xml_file
+
+
+
+def download_rfc_recursive(
+    rfc_number: str,
+    output_dir: Path,
+    fetch_pdf: bool = False,
+    max_depth: int = 1,
+    processed: set[str] | None = None,
+) -> dict[str, Path]:
+    """
+    Recursively download RFC and all referenced RFCs.
+
+    Args:
+        rfc_number: RFC number to download (will be normalized)
+        output_dir: Directory to save downloaded files
+        fetch_pdf: Whether to download PDF files
+        max_depth: Maximum recursion depth (default: 1)
+        processed: Set of already processed RFCs (for internal use)
+
+    Returns:
+        Dictionary mapping RFC numbers to their XML file paths
+    """
+    logger = logging.getLogger(__name__)
+
+    # Initialize processed set if not provided
+    if processed is None:
+        processed = set()
+
+    # Normalize RFC number
+    rfc_number = normalize_rfc_number(rfc_number)
+
+    # Check if already processed
+    if rfc_number in processed:
+        logger.debug(f"RFC {rfc_number} already processed, skipping")
+        return {}
+
+    # Add to processed set
+    processed.add(rfc_number)
+
+    # Initialize result dictionary
+    result = {}
+
+    # Determine XML file path
+    xml_file = output_dir / f"{rfc_number}.xml"
+
+    # Check if file exists
+    if xml_file.exists():
+        logger.info(f"RFC {rfc_number} already downloaded, skipping download")
+    else:
+        # Download the RFC
+        logger.info(f"Downloading RFC {rfc_number}...")
+        downloaded_file = download_rfc(rfc_number, output_dir, fetch_pdf)
+
+        if downloaded_file is None:
+            logger.error(f"Failed to download RFC {rfc_number}")
+            return result
+
+    # Add to result
+    result[rfc_number] = xml_file
+
+    # Extract references if max_depth > 0
+    if max_depth > 0:
+        try:
+            references = extract_rfc_references(xml_file)
+            logger.info(
+                f"Found {len(references)} RFC reference(s) in {rfc_number} (depth {max_depth})"
+            )
+
+            # Recursively download referenced RFCs
+            for ref_rfc in references:
+                logger.info(f"Found reference to RFC {ref_rfc} (depth {max_depth})")
+                ref_result = download_rfc_recursive(
+                    ref_rfc, output_dir, fetch_pdf, max_depth - 1, processed
+                )
+                result.update(ref_result)
+
+        except Exception as e:
+            logger.warning(f"Error extracting references from {rfc_number}: {e}")
+
+    return result
