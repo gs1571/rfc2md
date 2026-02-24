@@ -120,9 +120,7 @@ def main():
             logger.info(
                 f"Starting recursive download for RFC {rfc_number} with max depth {args.max_depth}"
             )
-            rfc_files = download_rfc_recursive(
-                rfc_number, output_dir, args.pdf, args.max_depth
-            )
+            rfc_files = download_rfc_recursive(rfc_number, output_dir, args.pdf, args.max_depth)
 
             if not rfc_files:
                 logger.error("Failed to download any RFCs")

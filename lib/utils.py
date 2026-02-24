@@ -37,7 +37,6 @@ def normalize_rfc_number(rfc_input):
     return rfc_input
 
 
-
 def extract_rfc_references(xml_file: Path) -> set[str]:
     """
     Extract RFC references from an RFC XML file.

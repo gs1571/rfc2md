@@ -33,7 +33,6 @@ class TestNormalizeRfcNumber:
         assert normalize_rfc_number("RFC99999") == "rfc99999"
 
 
-
 class TestExtractRfcReferences:
     """Tests for extract_rfc_references function."""
 

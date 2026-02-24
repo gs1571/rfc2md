@@ -153,7 +153,6 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
     return xml_file
 
 
-
 def download_rfc_recursive(
     rfc_number: str,
     output_dir: Path,
