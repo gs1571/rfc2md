@@ -3,7 +3,7 @@
 # Type checking
 mypy==1.8.0
 types-requests==2.31.0.20240125
-types-lxml==2026.2.16
+types-lxml==2025.8.25
 
 # Linting and formatting (Ruff replaces flake8, pylint, isort, black)
 ruff==0.1.15
