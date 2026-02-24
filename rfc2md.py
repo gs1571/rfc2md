@@ -18,7 +18,13 @@ import logging
 import sys
 from pathlib import Path
 
-from lib import XmlToMdConverter, download_rfc, download_rfc_recursive, normalize_rfc_number, setup_logging
+from lib import (
+    XmlToMdConverter,
+    download_rfc,
+    download_rfc_recursive,
+    normalize_rfc_number,
+    setup_logging,
+)
 
 
 def parse_arguments():

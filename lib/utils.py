@@ -48,7 +48,7 @@ def extract_rfc_references(xml_file: Path) -> set[str]:
     Returns:
         Set of normalized RFC numbers (format "rfcXXXX") found in the file
     """
-    rfc_refs = set()
+    rfc_refs: set[str] = set()
 
     try:
         # Parse the XML file

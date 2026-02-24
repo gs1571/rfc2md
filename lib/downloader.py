@@ -192,7 +192,7 @@ def download_rfc_recursive(
     processed.add(rfc_number)
 
     # Initialize result dictionary
-    result = {}
+    result: dict[str, Path] = {}
 
     # Determine XML file path
     xml_file = output_dir / f"{rfc_number}.xml"
