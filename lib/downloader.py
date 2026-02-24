@@ -13,9 +13,82 @@ import requests
 from lib.utils import extract_rfc_references, normalize_rfc_number
 
 
+def download_rfc_html(rfc_number, output_dir):
+    """
+    Download RFC HTML from rfc-editor.org.
+
+    Args:
+        rfc_number: Normalized RFC number (e.g., "rfc9514")
+        output_dir: Path object for output directory
+
+    Returns:
+        Path to downloaded HTML file, or None if download failed
+    """
+    logger = logging.getLogger(__name__)
+
+    # Extract numeric part for URL construction
+    rfc_num = rfc_number.replace("rfc", "")
+
+    # Download HTML
+    html_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.html"
+    html_file = output_dir / f"rfc{rfc_num}.html"
+
+    logger.info(f"Downloading HTML from: {html_url}")
+
+    try:
+        response = requests.get(html_url, timeout=30, stream=True)
+        response.raise_for_status()
+
+        # Get file size if available
+        total_size = int(response.headers.get("content-length", 0))
+
+        # Download with progress indication
+        downloaded = 0
+        chunk_size = 8192
+        start_time = time.time()
+
+        with open(html_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        percent = (downloaded / total_size) * 100
+                        logger.debug(
+                            f"Downloaded: {downloaded}/{total_size} bytes ({percent:.1f}%)"
+                        )
+
+        elapsed = time.time() - start_time
+        logger.info(
+            f"HTML downloaded successfully: {html_file} ({downloaded} bytes in {elapsed:.2f}s)"
+        )
+
+        return html_file
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            logger.error(f"RFC HTML not found: {rfc_number} (404 error)")
+        else:
+            logger.error(f"HTTP error downloading HTML: {e}")
+        return None
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Network connection error: {e}")
+        return None
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Download timeout: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error downloading HTML: {e}")
+        return None
+    except OSError as e:
+        logger.error(f"Error writing file {html_file}: {e}")
+        return None
+
+
 def download_rfc(rfc_number, output_dir, fetch_pdf=False):
     """
     Download RFC XML and optionally PDF from rfc-editor.org.
+    Falls back to HTML if XML is not available.
 
     Args:
         rfc_number: Normalized RFC number (e.g., "rfc9514")
@@ -23,7 +96,7 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
         fetch_pdf: Whether to download PDF version
 
     Returns:
-        Path to downloaded XML file, or None if download failed
+        Path to downloaded XML or HTML file, or None if download failed
     """
     logger = logging.getLogger(__name__)
 
@@ -66,7 +139,12 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
 
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            logger.error(f"RFC not found: {rfc_number} (404 error)")
+            logger.warning(f"RFC XML not found: {rfc_number} (404 error), trying HTML fallback")
+            # Try HTML fallback
+            html_file = download_rfc_html(rfc_number, output_dir)
+            if html_file:
+                return html_file
+            logger.error(f"RFC not found in any format: {rfc_number}")
         else:
             logger.error(f"HTTP error downloading XML: {e}")
         return None

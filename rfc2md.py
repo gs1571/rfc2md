@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from lib import (
+    HtmlToMdConverter,
     XmlToMdConverter,
     download_rfc,
     download_rfc_recursive,
@@ -138,7 +139,15 @@ def main():
 
                 try:
                     logger.info(f"Converting {rfc_num} to Markdown...")
-                    converter = XmlToMdConverter(xml_file)
+                    
+                    # Detect file type by extension
+                    if xml_file.suffix.lower() == ".html":
+                        logger.info(f"Using HTML converter for {rfc_num}")
+                        converter = HtmlToMdConverter(xml_file)
+                    else:
+                        logger.info(f"Using XML converter for {rfc_num}")
+                        converter = XmlToMdConverter(xml_file)
+                    
                     markdown_content = converter.convert()
 
                     # Write Markdown to file
@@ -175,9 +184,16 @@ def main():
 
             logger.info(f"Output file will be: {output_file.absolute()}")
 
-            # Convert XML to Markdown
+            # Convert to Markdown (detect file type)
             try:
-                converter = XmlToMdConverter(xml_file)
+                # Detect file type by extension
+                if xml_file.suffix.lower() == ".html":
+                    logger.info("Detected HTML file, using HTML converter")
+                    converter = HtmlToMdConverter(xml_file)
+                else:
+                    logger.info("Using XML converter")
+                    converter = XmlToMdConverter(xml_file)
+                
                 markdown_content = converter.convert()
 
                 # Write Markdown to file
@@ -206,9 +222,16 @@ def main():
 
         logger.info(f"Output file will be: {output_file.absolute()}")
 
-        # Convert XML to Markdown
+        # Convert to Markdown (detect file type)
         try:
-            converter = XmlToMdConverter(xml_file)
+            # Detect file type by extension
+            if xml_file.suffix.lower() == ".html":
+                logger.info("Detected HTML file, using HTML converter")
+                converter = HtmlToMdConverter(xml_file)
+            else:
+                logger.info("Using XML converter")
+                converter = XmlToMdConverter(xml_file)
+            
             markdown_content = converter.convert()
 
             # Write Markdown to file
