@@ -10,7 +10,11 @@ from pathlib import Path
 
 import requests
 
-from lib.utils import extract_rfc_references, normalize_rfc_number
+from lib.utils import (
+    extract_rfc_references_from_html,
+    extract_rfc_references_from_xml,
+    normalize_rfc_number,
+)
 
 
 def download_rfc_html(rfc_number, output_dir):
@@ -297,10 +301,17 @@ def download_rfc_recursive(
     # Add to result (use actual downloaded file, not assumed xml_file)
     result[rfc_number] = downloaded_file
 
-    # Extract references if max_depth > 0 and file is XML
-    if max_depth > 0 and downloaded_file.suffix.lower() == ".xml":
+    # Extract references if max_depth > 0
+    if max_depth > 0:
         try:
-            references = extract_rfc_references(downloaded_file)
+            # Choose extraction method based on file type
+            if downloaded_file.suffix.lower() == ".xml":
+                references = extract_rfc_references_from_xml(downloaded_file)
+            elif downloaded_file.suffix.lower() == ".html":
+                references = extract_rfc_references_from_html(downloaded_file)
+            else:
+                references = set()
+
             logger.info(
                 f"Found {len(references)} RFC reference(s) in {rfc_number} (depth {max_depth})"
             )
@@ -315,9 +326,5 @@ def download_rfc_recursive(
 
         except Exception as e:
             logger.warning(f"Error extracting references from {rfc_number}: {e}")
-    elif max_depth > 0 and downloaded_file.suffix.lower() == ".html":
-        logger.info(
-            f"Skipping reference extraction for {rfc_number} (HTML format does not support reference extraction)"
-        )
 
     return result

@@ -3,8 +3,10 @@ Utility functions for RFC to Markdown converter.
 """
 
 import logging
+import re
 from pathlib import Path
 
+from bs4 import BeautifulSoup
 from lxml import etree
 
 
@@ -37,7 +39,7 @@ def normalize_rfc_number(rfc_input):
     return rfc_input
 
 
-def extract_rfc_references(xml_file: Path) -> set[str]:
+def extract_rfc_references_from_xml(xml_file: Path) -> set[str]:
     """
     Extract RFC references from an RFC XML file.
 
@@ -78,5 +80,54 @@ def extract_rfc_references(xml_file: Path) -> set[str]:
         logging.warning(f"File not found: {xml_file}")
     except Exception as e:
         logging.warning(f"Error extracting RFC references from {xml_file}: {e}")
+
+    return rfc_refs
+
+
+def extract_rfc_references_from_html(html_file: Path) -> set[str]:
+    """
+    Extract RFC references from an RFC HTML file.
+
+    This function parses HTML and looks for RFC references in:
+    - Links with href="/rfc/rfcXXXX" pattern
+    - Text content matching "RFC XXXX" or "RFC-XXXX" patterns
+
+    Args:
+        html_file: Path to the RFC HTML file
+
+    Returns:
+        Set of normalized RFC numbers (format "rfcXXXX") found in the file
+    """
+    rfc_refs: set[str] = set()
+
+    try:
+        # Read and parse HTML file
+        with open(html_file, encoding="utf-8") as f:
+            html_content = f.read()
+
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        # Method 1: Extract from links with href="/rfc/rfcXXXX"
+        for link in soup.find_all("a", href=True):
+            href = link.get("href", "")
+            if isinstance(href, str):
+                # Match patterns like "/rfc/rfc1234" or "/rfc/rfc1234.html"
+                match = re.search(r"/rfc/rfc(\d+)", href)
+                if match:
+                    rfc_number = f"rfc{match.group(1)}"
+                    rfc_refs.add(rfc_number)
+
+        # Method 2: Extract from text content matching "RFC XXXX" or "RFC-XXXX"
+        text_content = soup.get_text()
+        # Find all RFC references in text (RFC followed by number)
+        rfc_pattern = re.compile(r"\bRFC[\s-]?(\d+)\b", re.IGNORECASE)
+        for match in rfc_pattern.finditer(text_content):
+            rfc_number = f"rfc{match.group(1)}"
+            rfc_refs.add(rfc_number)
+
+    except FileNotFoundError:
+        logging.warning(f"File not found: {html_file}")
+    except Exception as e:
+        logging.warning(f"Error extracting RFC references from HTML {html_file}: {e}")
 
     return rfc_refs
