@@ -106,6 +106,7 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
     # Download XML
     xml_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.xml"
     xml_file = output_dir / f"rfc{rfc_num}.xml"
+    downloaded_file = xml_file
 
     logger.info(f"Downloading XML from: {xml_url}")
 
@@ -143,11 +144,13 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
             # Try HTML fallback
             html_file = download_rfc_html(rfc_number, output_dir)
             if html_file:
-                return html_file
-            logger.error(f"RFC not found in any format: {rfc_number}")
+                downloaded_file = html_file
+            else:
+                logger.error(f"RFC not found in any format: {rfc_number}")
+                return None
         else:
             logger.error(f"HTTP error downloading XML: {e}")
-        return None
+            return None
     except requests.exceptions.ConnectionError as e:
         logger.error(f"Network connection error: {e}")
         return None
@@ -161,7 +164,7 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
         logger.error(f"Error writing file {xml_file}: {e}")
         return None
 
-    # Download PDF if requested
+    # Download PDF if requested (works for both XML and HTML fallback)
     if fetch_pdf:
         pdf_file = output_dir / f"rfc{rfc_num}.pdf"
 
@@ -197,7 +200,7 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 # Try fallback URL
-                pdf_url_fallback = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.txt.pdf"
+                pdf_url_fallback = f"https://www.rfc-editor.org/rfc/pdfrfc/rfc{rfc_num}.txt.pdf"
                 logger.info(f"Primary PDF not found, trying fallback: {pdf_url_fallback}")
 
                 try:
@@ -228,7 +231,7 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
         except OSError as e:
             logger.warning(f"Error writing PDF file {pdf_file}: {e}")
 
-    return xml_file
+    return downloaded_file
 
 
 def download_rfc_recursive(
