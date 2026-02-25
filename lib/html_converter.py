@@ -256,8 +256,10 @@ class HtmlToMdConverter:
         This method:
         1. Preserves leading spaces from the original line
         2. Removes trailing dots and page numbers from anywhere in the line
-        3. Finds section number pattern anywhere in the line and creates anchor
-        4. Handles multi-line entries (continuation lines without section numbers)
+        3. Removes alignment dots (e.g., ". . . . . .")
+        4. Finds section number pattern and creates anchor
+        5. Handles both formats: "1.Title" and "1. Title"
+        6. Handles multi-line entries (continuation lines without section numbers)
 
         Args:
             line: A single TOC entry line (may be continuation line)
@@ -273,21 +275,30 @@ class HtmlToMdConverter:
             else:
                 break
 
-        # Remove trailing dots and page numbers from the end: \.+\s*\d*$
+        # Step 1: Remove trailing dots and page numbers
+        # This handles RFC7752 format: "Introduction....3"
         line_cleaned = re.sub(r"\.+\s*\d*$", "", line).strip()
+
+        # Step 2: Remove alignment dots for RFC8402 format: ". . . . . ."
+        # Pattern matches: space, dot, (space dot)+ at end of line
+        line_cleaned = re.sub(r"\s*(\.\s+)+\.\s*$", "", line_cleaned).strip()
 
         if not line_cleaned:
             return None
 
         # Try to find section number pattern ANYWHERE in the line
-        # Pattern: digits separated by dots, followed by dot and space
-        match = re.search(r"(\d+(?:\.\d+)*)\.\s+", line_cleaned)
+        # Support both formats:
+        # - "1. Title" (dot with space)
+        # - "1.Title" (dot without space)
+        match = re.search(r"(\d+(?:\.\d+)*)\.(\s*)", line_cleaned)
 
         if match:
             # This line has a section number - create anchor link
             section_num = match.group(1)
-            # Get text after the section number
-            section_title = line_cleaned[match.end() :]
+
+            # Get text after the section number and dot
+            # Handle both "1. Title" and "1.Title"
+            section_title = line_cleaned[match.end() :].strip()
 
             # Create simple section anchor: #section-1-2-3
             anchor_id = self._create_section_anchor(section_num)

@@ -184,4 +184,117 @@ class TestSectionProcessing:
 
         # Should contain pre blocks
         assert "```text" in result
-        assert "```" in result
+
+
+class TestTocFormatting:
+    """Tests for TOC entry formatting."""
+
+    def test_format_toc_entry_rfc7752_format(self):
+        """Test TOC entry formatting for RFC7752 format (continuous dots)."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # Test format: "   1. Introduction....3"
+        line = "   1. Introduction....................................................3"
+        result = converter._format_toc_entry(line)
+        expected = "`   `[`1`](#section-1)`. Introduction`"
+        assert result == expected
+
+    def test_format_toc_entry_rfc8402_format(self):
+        """Test TOC entry formatting for RFC8402 format (spaced dots)."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # Test format: "   1. Introduction  . . . . . . . . . . . . . . . . . . . . . . .  6"
+        line = "   1. Introduction  . . . . . . . . . . . . . . . . . . . . . . .  6"
+        result = converter._format_toc_entry(line)
+        expected = "`   `[`1`](#section-1)`. Introduction`"
+        assert result == expected
+
+    def test_format_toc_entry_with_subsection(self):
+        """Test TOC entry with subsection number."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # RFC7752 format
+        line = "      1.1. Requirements Language ......................................5"
+        result = converter._format_toc_entry(line)
+        expected = "`      `[`1.1`](#section-1-1)`. Requirements Language`"
+        assert result == expected
+
+        # RFC8402 format
+        line = "     3.1. IGP-Prefix Segment (Prefix-SID) . . . . . . . . . . . .  9"
+        result = converter._format_toc_entry(line)
+        expected = "`     `[`3.1`](#section-3-1)`. IGP-Prefix Segment (Prefix-SID)`"
+        assert result == expected
+
+    def test_format_toc_entry_with_deep_subsection(self):
+        """Test TOC entry with deep subsection number."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        line = "           3.2.1. Node Descriptors...................................12"
+        result = converter._format_toc_entry(line)
+        expected = "`           `[`3.2.1`](#section-3-2-1)`. Node Descriptors`"
+        assert result == expected
+
+    def test_format_toc_entry_continuation_line(self):
+        """Test TOC entry continuation line (no section number)."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        line = "                  Functional Components"
+        result = converter._format_toc_entry(line)
+        expected = "`                  Functional Components`"
+        assert result == expected
+
+    def test_format_toc_entry_with_page_number_rfc7752(self):
+        """Test TOC entry with page number at the end (RFC7752 format)."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # RFC7752 format with page number
+        line = "   1. Introduction.....................................3"
+        result = converter._format_toc_entry(line)
+        expected = "`   `[`1`](#section-1)`. Introduction`"
+        assert result == expected
+
+    def test_format_toc_entry_with_page_number_rfc8402(self):
+        """Test TOC entry with page number at the end (RFC8402 format)."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # RFC8402 format with page number
+        line = "   1. Introduction  . . . . . . . . . . . . . . . . . . . . . . .  5"
+        result = converter._format_toc_entry(line)
+        expected = "`   `[`1`](#section-1)`. Introduction`"
+        assert result == expected
+
+    def test_format_toc_entry_empty_line(self):
+        """Test TOC entry with empty line."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        line = "   "
+        result = converter._format_toc_entry(line)
+        assert result is None
+
+    def test_format_toc_entry_special_characters(self):
+        """Test TOC entry with special characters in title."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        line = "   3. Link-State IGP Segments . . . . . . . . . . . . . . . . .  9"
+        result = converter._format_toc_entry(line)
+        expected = "`   `[`3`](#section-3)`. Link-State IGP Segments`"
+        assert result == expected
+
+    def test_format_toc_entry_mixed_formats(self):
+        """Test that both RFC formats work correctly in same document."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # RFC7752 style
+        line1 = "   1. Introduction....................................................3"
+        result1 = converter._format_toc_entry(line1)
+        assert result1 is not None
+        assert "Introduction`" in result1
+        assert ". . ." not in result1
+        assert "..." not in result1
+
+        # RFC8402 style
+        line2 = "   2. Terminology . . . . . . . . . . . . . . . . . . . . . . . .  6"
+        result2 = converter._format_toc_entry(line2)
+        assert result2 is not None
+        assert "Terminology`" in result2
+        assert ". . ." not in result2
