@@ -107,13 +107,19 @@ Specify a custom name for the Markdown output:
 python3 rfc2md.py --file examples/rfc9514.xml --output custom-name.md
 ```
 
-### Enable Debug Logging
+### Enable Debug Logging and Keep Source Files
 
-Get detailed logging information:
+Get detailed logging information and keep intermediate XML/HTML files:
 
 ```bash
 python3 rfc2md.py --rfc 9514 --debug
 ```
+
+**Note:** By default, intermediate XML/HTML files are automatically deleted after successful conversion to save disk space. Use the `--debug` flag to keep these files for inspection or debugging purposes.
+
+**Behavior:**
+- **Without `--debug`**: Only the final `.md` file is saved (and `.pdf` if requested)
+- **With `--debug`**: Both source files (`.xml` or `.html`) and the final `.md` file are saved
 
 ## Complete Examples
 
@@ -130,8 +136,17 @@ python3 rfc2md.py --rfc 9514 --recursive --max-depth 2 --debug
 # Convert local file with custom output name
 python3 rfc2md.py --file examples/rfc9514.xml --output output/my-rfc.md
 
-# Download and convert with debug logging
+# Download and convert with debug logging (keeps source files)
 python3 rfc2md.py --rfc 9514 --output-dir output --debug
+
+# Keep intermediate files for debugging
+python3 rfc2md.py --rfc 9514 --debug --output-dir output
+
+# Recursive download without keeping source files (saves disk space)
+python3 rfc2md.py --rfc 9514 --recursive --output-dir output
+
+# Recursive download with debug (keeps all XML/HTML files)
+python3 rfc2md.py --rfc 9514 --recursive --debug --output-dir output
 ```
 
 ## Supported RFC XML Version

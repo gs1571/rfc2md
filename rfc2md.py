@@ -157,6 +157,11 @@ def main():
                     logger.info(f"Successfully converted {rfc_num} to Markdown")
                     success_count += 1
 
+                    # Remove intermediate file if not in debug mode
+                    if not args.debug and xml_file:
+                        logger.debug(f"Removing intermediate file: {xml_file}")
+                        xml_file.unlink(missing_ok=True)
+
                 except Exception as e:
                     logger.error(f"Error converting {rfc_num}: {e}", exc_info=args.debug)
 
@@ -201,6 +206,11 @@ def main():
                     f.write(markdown_content)
 
                 logger.info(f"Successfully converted to Markdown: {output_file}")
+
+                # Remove intermediate file if not in debug mode
+                if not args.debug and xml_file:
+                    logger.debug(f"Removing intermediate file: {xml_file}")
+                    xml_file.unlink(missing_ok=True)
 
             except Exception as e:
                 logger.error(f"Error during conversion: {e}", exc_info=True)
