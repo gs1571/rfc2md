@@ -274,12 +274,17 @@ def download_rfc_recursive(
     # Initialize result dictionary
     result: dict[str, Path] = {}
 
-    # Determine XML file path
+    # Determine file paths (could be XML or HTML)
     xml_file = output_dir / f"{rfc_number}.xml"
+    html_file = output_dir / f"{rfc_number}.html"
 
-    # Check if file exists
+    # Check if file already exists (XML or HTML)
     if xml_file.exists():
-        logger.info(f"RFC {rfc_number} already downloaded, skipping download")
+        logger.info(f"RFC {rfc_number} XML already downloaded, skipping download")
+        downloaded_file = xml_file
+    elif html_file.exists():
+        logger.info(f"RFC {rfc_number} HTML already downloaded, skipping download")
+        downloaded_file = html_file
     else:
         # Download the RFC
         logger.info(f"Downloading RFC {rfc_number}...")
@@ -289,13 +294,13 @@ def download_rfc_recursive(
             logger.error(f"Failed to download RFC {rfc_number}")
             return result
 
-    # Add to result
-    result[rfc_number] = xml_file
+    # Add to result (use actual downloaded file, not assumed xml_file)
+    result[rfc_number] = downloaded_file
 
-    # Extract references if max_depth > 0
-    if max_depth > 0:
+    # Extract references if max_depth > 0 and file is XML
+    if max_depth > 0 and downloaded_file.suffix.lower() == ".xml":
         try:
-            references = extract_rfc_references(xml_file)
+            references = extract_rfc_references(downloaded_file)
             logger.info(
                 f"Found {len(references)} RFC reference(s) in {rfc_number} (depth {max_depth})"
             )
@@ -310,5 +315,9 @@ def download_rfc_recursive(
 
         except Exception as e:
             logger.warning(f"Error extracting references from {rfc_number}: {e}")
+    elif max_depth > 0 and downloaded_file.suffix.lower() == ".html":
+        logger.info(
+            f"Skipping reference extraction for {rfc_number} (HTML format does not support reference extraction)"
+        )
 
     return result
