@@ -61,10 +61,13 @@ class HtmlToMdConverter:
         text_collapsed = self._collapse_empty_lines(text_without_page_breaks)
 
         # Stage 4: Extract and format Table of Contents
-        text_with_formatted_toc, formatted_toc = self._extract_toc(text_collapsed)
+        text_with_formatted_toc, formatted_toc, toc_start_line = self._extract_toc(text_collapsed)
+
+        # Stage 5: Process sections and wrap in pre blocks with anchors
+        text_with_sections = self._process_sections(text_with_formatted_toc, toc_start_line)
 
         # TODO: Implement remaining stages
-        return text_with_formatted_toc
+        return text_with_sections
 
     def _extract_raw_text(self):
         """
@@ -192,9 +195,10 @@ class HtmlToMdConverter:
             text: Input text containing the Table of Contents
 
         Returns:
-            Tuple of (text_with_formatted_toc, formatted_toc) where:
+            Tuple of (text_with_formatted_toc, formatted_toc, toc_start_line) where:
             - text_with_formatted_toc: Text with old TOC replaced by formatted TOC
             - formatted_toc: Formatted TOC as markdown string (for reference)
+            - toc_start_line: Line number where TOC starts (for wrapping pre-TOC content)
         """
         self.logger.debug("Extracting Table of Contents")
 
@@ -210,7 +214,7 @@ class HtmlToMdConverter:
 
         if toc_start == -1:
             self.logger.debug("No Table of Contents found")
-            return text, ""
+            return text, "", -1
 
         # Find TOC end - next line that starts without leading spaces (next section)
         for i in range(toc_start + 1, len(lines)):
@@ -243,7 +247,7 @@ class HtmlToMdConverter:
 
         self.logger.debug(f"Extracted TOC with {len(formatted_entries)} entries")
 
-        return text_with_formatted_toc, formatted_toc
+        return text_with_formatted_toc, formatted_toc, toc_start
 
     def _format_toc_entry(self, line):
         """
@@ -296,3 +300,123 @@ class HtmlToMdConverter:
             formatted = f"`{leading_spaces}{line_cleaned}`"
 
         return formatted
+
+    def _create_section_anchor(self, section_num):
+        """
+        Create an anchor ID from a section number.
+
+        Converts section numbers like "1.2.3" to anchor IDs like "section-1-2-3".
+
+        Args:
+            section_num: Section number string (e.g., "1", "1.2", "3.2.1")
+
+        Returns:
+            String containing the anchor ID
+        """
+        return f"section-{section_num.replace('.', '-')}"
+
+    def _process_sections(self, text, toc_start_line):
+        """
+        Find section headers and wrap text segments in pre blocks with anchors.
+
+        This method:
+        1. Wraps all text before TOC in a pre block
+        2. Finds all section headers matching pattern: ^(\d+(?:\.\d+)*)\.\s+(.+)$
+        3. Extracts headers from text
+        4. Creates monospace headers with anchors: `<a id="section-X-Y"></a>X.Y. Title`
+        5. Wraps text segments between sections in ```text``` blocks
+        6. Assembles document: pre block (before TOC) → TOC → pre block → header → pre block → header → ...
+
+        Args:
+            text: Input text with section headers and formatted TOC
+            toc_start_line: Line number where TOC starts (to wrap pre-TOC content)
+
+        Returns:
+            String with sections processed and wrapped in pre blocks
+        """
+        self.logger.debug("Processing sections and wrapping in pre blocks")
+
+        lines = text.split('\n')
+        
+        # Find all section headers with their positions
+        section_positions = []
+        section_pattern = re.compile(r'^(\d+(?:\.\d+)*)\.\s+(.+)$')
+        
+        for i, line in enumerate(lines):
+            match = section_pattern.match(line)
+            if match:
+                section_num = match.group(1)
+                section_title = match.group(2)
+                section_positions.append({
+                    'line_num': i,
+                    'section_num': section_num,
+                    'title': section_title
+                })
+        
+        self.logger.debug(f"Found {len(section_positions)} section headers")
+        
+        # Build the document with pre blocks and section headers
+        result_parts = []
+        
+        # Find where TOC ends (look for the line after last TOC entry)
+        toc_end_line = -1
+        if toc_start_line >= 0:
+            # Find the end of TOC - look for first section header after TOC
+            for i in range(toc_start_line, len(lines)):
+                if section_positions and i >= section_positions[0]['line_num']:
+                    toc_end_line = i
+                    break
+        
+        # Wrap content before TOC in pre block
+        if toc_start_line > 0:
+            pre_toc_content = '\n'.join(lines[:toc_start_line])
+            result_parts.append('```text')
+            result_parts.append(pre_toc_content)
+            result_parts.append('```')
+            result_parts.append('')
+        
+        # Add TOC section (already formatted, between toc_start_line and toc_end_line)
+        if toc_start_line >= 0 and toc_end_line > toc_start_line:
+            toc_content = '\n'.join(lines[toc_start_line:toc_end_line])
+            result_parts.append(toc_content)
+            result_parts.append('')
+        
+        # Check if we have sections
+        if not section_positions:
+            # No sections found, wrap remaining text after TOC
+            if toc_end_line >= 0:
+                remaining_content = '\n'.join(lines[toc_end_line:])
+            else:
+                remaining_content = text
+            result_parts.append('```text')
+            result_parts.append(remaining_content)
+            result_parts.append('```')
+            return '\n'.join(result_parts)
+        
+        # Process each section
+        for idx, section_info in enumerate(section_positions):
+            section_num = section_info['section_num']
+            section_title = section_info['title']
+            section_line = section_info['line_num']
+            
+            # Create section header with anchor
+            anchor_id = self._create_section_anchor(section_num)
+            section_header = f"`<a id=\"{anchor_id}\"></a>{section_num}. {section_title}`"
+            result_parts.append(section_header)
+            result_parts.append('')
+            
+            # Get content between this section and next section (or end of document)
+            if idx < len(section_positions) - 1:
+                next_section_line = section_positions[idx + 1]['line_num']
+                content_lines = lines[section_line + 1:next_section_line]
+            else:
+                content_lines = lines[section_line + 1:]
+            
+            # Wrap content in pre block
+            content = '\n'.join(content_lines)
+            result_parts.append('```text')
+            result_parts.append(content)
+            result_parts.append('```')
+            result_parts.append('')
+        
+        return '\n'.join(result_parts)
