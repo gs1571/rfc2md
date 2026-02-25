@@ -44,29 +44,29 @@ class HtmlToMdConverter:
 
         # Parse HTML
         try:
-            with open(self.html_file, "r", encoding="utf-8") as f:
+            with open(self.html_file, encoding="utf-8") as f:
                 html_content = f.read()
             self.soup = BeautifulSoup(html_content, "html.parser")
         except Exception as e:
             raise ValueError(f"Error parsing HTML: {e}") from e
 
-        # Stage 1: Extract raw text and remove links
+        # Extract raw text and remove links
         raw_text = self._extract_raw_text()
         text_without_links = self._remove_links(raw_text)
 
-        # Stage 2: Remove page breaks
+        # Remove page breaks
         text_without_page_breaks = self._remove_page_breaks(text_without_links)
 
-        # Stage 3: Collapse multiple empty lines
+        # Collapse multiple empty lines
         text_collapsed = self._collapse_empty_lines(text_without_page_breaks)
 
-        # Stage 4: Extract and format Table of Contents
+        # Extract and format Table of Contents
         text_with_formatted_toc, formatted_toc, toc_start_line = self._extract_toc(text_collapsed)
 
-        # Stage 5: Process sections and wrap in pre blocks with anchors
+        # Process sections and wrap in pre blocks with anchors
         text_with_sections = self._process_sections(text_with_formatted_toc, toc_start_line)
 
-        # TODO: Implement remaining stages
+        # Document is ready
         return text_with_sections
 
     def _extract_raw_text(self):
@@ -113,10 +113,10 @@ class HtmlToMdConverter:
         self.logger.debug("Removing HTML links from text")
 
         # Remove opening <a> tags with any attributes
-        text = re.sub(r'<a[^>]*>', '', text)
+        text = re.sub(r"<a[^>]*>", "", text)
 
         # Remove closing </a> tags
-        text = re.sub(r'</a>', '', text)
+        text = re.sub(r"</a>", "", text)
 
         self.logger.debug("HTML links removed")
         return text
@@ -138,25 +138,25 @@ class HtmlToMdConverter:
         """
         self.logger.debug("Removing page breaks from text")
 
-        lines = text.split('\n')
+        lines = text.split("\n")
         cleaned_lines = []
 
         for line in lines:
             # Skip lines with "Standards Track" and "[Page N]" pattern
-            if re.search(r'Standards Track\s+\[Page \d+\]', line):
+            if re.search(r"Standards Track\s+\[Page \d+\]", line):
                 continue
 
             # Skip lines with "RFC NNNN" and date pattern
-            if re.search(r'^RFC \d+\s+.+\s+\w+ \d{4}$', line):
+            if re.search(r"^RFC \d+\s+.+\s+\w+ \d{4}$", line):
                 continue
 
             # Skip lines that are only dashes or form feed characters
-            if re.match(r'^[\s\-\f]+$', line) and len(line.strip('-').strip()) == 0:
+            if re.match(r"^[\s\-\f]+$", line) and len(line.strip("-").strip()) == 0:
                 continue
 
             cleaned_lines.append(line)
 
-        result = '\n'.join(cleaned_lines)
+        result = "\n".join(cleaned_lines)
         self.logger.debug(f"Removed {len(lines) - len(cleaned_lines)} page break lines")
 
         return result
@@ -179,7 +179,7 @@ class HtmlToMdConverter:
 
         # Replace three or more consecutive newlines with exactly two
         # This preserves single empty lines while removing multiple ones
-        result = re.sub(r'\n\n\n+', '\n\n', text)
+        result = re.sub(r"\n\n\n+", "\n\n", text)
 
         self.logger.debug("Empty lines collapsed")
         return result
@@ -202,13 +202,13 @@ class HtmlToMdConverter:
         """
         self.logger.debug("Extracting Table of Contents")
 
-        lines = text.split('\n')
+        lines = text.split("\n")
         toc_start = -1
         toc_end = -1
 
         # Find TOC start
         for i, line in enumerate(lines):
-            if line.strip().startswith('Table of Contents'):
+            if line.strip().startswith("Table of Contents"):
                 toc_start = i
                 break
 
@@ -221,7 +221,7 @@ class HtmlToMdConverter:
             line = lines[i]
             # TOC ends when we hit a line that starts without spaces and is not empty
             # and is not a TOC entry (doesn't have dots and page numbers)
-            if line and not line[0].isspace() and not re.search(r'\.+\s*\d+$', line):
+            if line and not line[0].isspace() and not re.search(r"\.+\s*\d+$", line):
                 toc_end = i
                 break
 
@@ -232,18 +232,18 @@ class HtmlToMdConverter:
         toc_lines = lines[toc_start:toc_end]
 
         # Format TOC entries
-        formatted_entries = ['`Table of Contents`', '']
+        formatted_entries = ["`Table of Contents`", ""]
         for line in toc_lines[1:]:  # Skip "Table of Contents" header
             if line.strip():  # Skip empty lines
                 formatted_entry = self._format_toc_entry(line)
                 if formatted_entry:
                     formatted_entries.append(formatted_entry)
-                    formatted_entries.append('')  # Add empty line between entries
+                    formatted_entries.append("")  # Add empty line between entries
 
-        formatted_toc = '\n'.join(formatted_entries)
-        
+        formatted_toc = "\n".join(formatted_entries)
+
         # Replace old TOC with formatted TOC in the text
-        text_with_formatted_toc = '\n'.join(lines[:toc_start] + [formatted_toc] + lines[toc_end:])
+        text_with_formatted_toc = "\n".join(lines[:toc_start] + [formatted_toc] + lines[toc_end:])
 
         self.logger.debug(f"Extracted TOC with {len(formatted_entries)} entries")
 
@@ -266,29 +266,29 @@ class HtmlToMdConverter:
             Formatted markdown string or None if line is empty after cleaning
         """
         # Extract leading spaces
-        leading_spaces = ''
+        leading_spaces = ""
         for char in line:
-            if char == ' ':
+            if char == " ":
                 leading_spaces += char
             else:
                 break
 
         # Remove trailing dots and page numbers from the end: \.+\s*\d*$
-        line_cleaned = re.sub(r'\.+\s*\d*$', '', line).strip()
+        line_cleaned = re.sub(r"\.+\s*\d*$", "", line).strip()
 
         if not line_cleaned:
             return None
 
         # Try to find section number pattern ANYWHERE in the line
         # Pattern: digits separated by dots, followed by dot and space
-        match = re.search(r'(\d+(?:\.\d+)*)\.\s+', line_cleaned)
+        match = re.search(r"(\d+(?:\.\d+)*)\.\s+", line_cleaned)
 
         if match:
             # This line has a section number - create anchor link
             section_num = match.group(1)
             # Get text after the section number
-            section_title = line_cleaned[match.end():]
-            
+            section_title = line_cleaned[match.end() :]
+
             # Create anchor ID: section-1-1 (replace dots with dashes)
             anchor_id = f"section-{section_num.replace('.', '-')}"
 
@@ -316,7 +316,7 @@ class HtmlToMdConverter:
         return f"section-{section_num.replace('.', '-')}"
 
     def _process_sections(self, text, toc_start_line):
-        """
+        r"""
         Find section headers and wrap text segments in pre blocks with anchors.
 
         This method:
@@ -336,87 +336,82 @@ class HtmlToMdConverter:
         """
         self.logger.debug("Processing sections and wrapping in pre blocks")
 
-        lines = text.split('\n')
-        
+        lines = text.split("\n")
+
         # Find all section headers with their positions
         section_positions = []
-        section_pattern = re.compile(r'^(\d+(?:\.\d+)*)\.\s+(.+)$')
-        
+        section_pattern = re.compile(r"^(\d+(?:\.\d+)*)\.\s+(.+)$")
+
         for i, line in enumerate(lines):
             match = section_pattern.match(line)
             if match:
                 section_num = match.group(1)
                 section_title = match.group(2)
-                section_positions.append({
-                    'line_num': i,
-                    'section_num': section_num,
-                    'title': section_title
-                })
-        
+                section_positions.append(
+                    {"line_num": i, "section_num": section_num, "title": section_title}
+                )
+
         self.logger.debug(f"Found {len(section_positions)} section headers")
-        
+
         # Build the document with pre blocks and section headers
         result_parts = []
-        
+
         # Find where TOC ends (look for the line after last TOC entry)
         toc_end_line = -1
         if toc_start_line >= 0:
             # Find the end of TOC - look for first section header after TOC
             for i in range(toc_start_line, len(lines)):
-                if section_positions and i >= section_positions[0]['line_num']:
+                if section_positions and i >= section_positions[0]["line_num"]:
                     toc_end_line = i
                     break
-        
+
         # Wrap content before TOC in pre block
         if toc_start_line > 0:
-            pre_toc_content = '\n'.join(lines[:toc_start_line])
-            result_parts.append('```text')
+            pre_toc_content = "\n".join(lines[:toc_start_line])
+            result_parts.append("```text")
             result_parts.append(pre_toc_content)
-            result_parts.append('```')
-            result_parts.append('')
-        
+            result_parts.append("```")
+            result_parts.append("")
+
         # Add TOC section (already formatted, between toc_start_line and toc_end_line)
         if toc_start_line >= 0 and toc_end_line > toc_start_line:
-            toc_content = '\n'.join(lines[toc_start_line:toc_end_line])
+            toc_content = "\n".join(lines[toc_start_line:toc_end_line])
             result_parts.append(toc_content)
-            result_parts.append('')
-        
+            result_parts.append("")
+
         # Check if we have sections
         if not section_positions:
             # No sections found, wrap remaining text after TOC
-            if toc_end_line >= 0:
-                remaining_content = '\n'.join(lines[toc_end_line:])
-            else:
-                remaining_content = text
-            result_parts.append('```text')
+            remaining_content = "\n".join(lines[toc_end_line:]) if toc_end_line >= 0 else text
+            result_parts.append("```text")
             result_parts.append(remaining_content)
-            result_parts.append('```')
-            return '\n'.join(result_parts)
-        
+            result_parts.append("```")
+            return "\n".join(result_parts)
+
         # Process each section
         for idx, section_info in enumerate(section_positions):
-            section_num = section_info['section_num']
-            section_title = section_info['title']
-            section_line = section_info['line_num']
-            
+            section_num = section_info["section_num"]
+            section_title = section_info["title"]
+            section_line = section_info["line_num"]
+
             # Create section header with anchor
             anchor_id = self._create_section_anchor(section_num)
-            section_header = f"`<a id=\"{anchor_id}\"></a>{section_num}. {section_title}`"
+            section_header = f'`<a id="{anchor_id}"></a>{section_num}. {section_title}`'
             result_parts.append(section_header)
-            result_parts.append('')
-            
+            result_parts.append("")
+
             # Get content between this section and next section (or end of document)
             if idx < len(section_positions) - 1:
-                next_section_line = section_positions[idx + 1]['line_num']
-                content_lines = lines[section_line + 1:next_section_line]
+                next_section_line = section_positions[idx + 1]["line_num"]
+                content_lines = lines[section_line + 1 : next_section_line]
             else:
-                content_lines = lines[section_line + 1:]
-            
+                content_lines = lines[section_line + 1 :]
+
             # Wrap content in pre block
-            content = '\n'.join(content_lines)
-            result_parts.append('```text')
+            content = "\n".join(content_lines)
+            result_parts.append("```text")
             result_parts.append(content)
-            result_parts.append('```')
-            result_parts.append('')
-        
-        return '\n'.join(result_parts)
+            result_parts.append("```")
+            result_parts.append("")
+
+        return "\n".join(result_parts)

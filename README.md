@@ -138,6 +138,54 @@ python3 rfc2md.py --rfc 9514 --output-dir output --debug
 
 This tool supports **RFC XML v3** format as specified by the IETF. This is the current standard format used by rfc-editor.org.
 
+## HTML Fallback Support
+
+For older RFCs where XML format is not available, the tool provides HTML fallback conversion:
+
+### Why HTML Fallback?
+
+- Many older RFCs (pre-2010) are only available in HTML or plain text format
+- HTML versions contain the complete RFC text in `<pre>` blocks
+- Provides better structure preservation than plain text
+
+### HTML Processing Approach
+
+The HTML converter:
+1. **Extracts text from `<pre>` blocks** - All RFC content is in preformatted blocks
+2. **Removes HTML links** - Links cannot be correctly rendered in monospace markdown blocks
+3. **Removes page breaks** - Cleans up pagination artifacts (headers, footers, page numbers)
+4. **Processes Table of Contents** - Converts to clickable markdown links
+5. **Identifies sections** - Extracts section headers and creates anchors
+6. **Wraps in markdown pre blocks** - Preserves monospace formatting with ` ```text ``` `
+
+### Why Links Are Removed
+
+HTML RFC files contain inline links (e.g., `<a href="#section-1">1</a>`). These links:
+- Cannot be preserved in monospace markdown blocks without breaking formatting
+- Would appear as raw HTML in the output
+- Are replaced with internal section anchors in the Table of Contents
+
+### Output Format
+
+HTML-converted RFCs have a simplified structure:
+- Document title as H1 header
+- Table of Contents with clickable section links
+- Content wrapped in ` ```text ``` ` blocks
+- Section headers as monospace with anchors
+- No HTML metadata in output
+
+### Usage
+
+HTML conversion is automatic when XML is not available:
+
+```bash
+# Automatically uses HTML if XML not found
+python3 rfc2md.py --rfc 7752
+
+# Explicit HTML file conversion
+python3 rfc2md.py --file examples/rfc7752.html
+```
+
 ## Output Format
 
 The converter generates GitHub Flavored Markdown (GFM) for maximum compatibility with:

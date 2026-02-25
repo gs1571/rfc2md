@@ -2,222 +2,7 @@
 Tests for HTML to Markdown converter.
 """
 
-import pytest
-
 from lib.html_converter import HtmlToMdConverter
-
-
-class TestPageBreakRemoval:
-    """Tests for page break removal functionality."""
-
-    def test_remove_page_breaks(self):
-        """Test that page headers and footers are removed."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        text = """Some content here
-Gredler, et al.              Standards Track                    [Page 1]
-More content
-RFC 7752                  BGP-LS                        March 2016
-Final content"""
-        
-        result = converter._remove_page_breaks(text)
-        
-        # Page header and footer should be removed
-        assert "Standards Track" not in result
-        assert "[Page 1]" not in result
-        assert "March 2016" not in result or "RFC 7752" not in result
-        
-        # Content should remain
-        assert "Some content here" in result
-        assert "More content" in result
-        assert "Final content" in result
-
-    def test_merge_split_paragraphs(self):
-        """Test that paragraphs split by page breaks are merged."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        text = """This is a sentence that continues
-on the next line without proper ending
-This is a new paragraph."""
-        
-        result = converter._remove_page_breaks(text)
-        
-        # Lines should be merged if they don't end with terminal punctuation
-        lines = result.split("\n")
-        # The first two lines should be merged
-        assert any("continues on the next line" in line for line in lines)
-
-    def test_preserve_paragraph_breaks(self):
-        """Test that intentional paragraph breaks are preserved."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        text = """First paragraph ends here.
-
-Second paragraph starts here."""
-        
-        result = converter._remove_page_breaks(text)
-        
-        # Empty line should be preserved
-        assert "\n\n" in result or result.count("\n") >= 2
-
-
-class TestCodeBlockDetection:
-    """Tests for code block detection heuristics."""
-
-    def test_is_ascii_art(self):
-        """Test ASCII art detection."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        # ASCII art with box characters
-        ascii_art = [
-            "+---+---+",
-            "| A | B |",
-            "+---+---+",
-            "| C | D |",
-            "+---+---+"
-        ]
-        assert converter._is_ascii_art(ascii_art) is True
-        
-        # Regular text
-        regular_text = [
-            "This is normal text",
-            "without any special characters",
-            "just plain prose"
-        ]
-        assert converter._is_ascii_art(regular_text) is False
-
-    def test_is_protocol_format(self):
-        """Test protocol format detection."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        # Protocol diagram with bit markers
-        protocol = [
-            "0 1 2 3 4 5 6 7",
-            "+-+-+-+-+-+-+-+-+",
-            "|  Type | Flags |",
-            "+-+-+-+-+-+-+-+-+"
-        ]
-        assert converter._is_protocol_format(protocol) is True
-        
-        # Regular text
-        regular_text = [
-            "This is normal text",
-            "without protocol markers"
-        ]
-        assert converter._is_protocol_format(regular_text) is False
-
-    def test_is_ascii_table(self):
-        """Test ASCII table detection."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        # ASCII table
-        table = [
-            "+-------+-------+",
-            "| Col 1 | Col 2 |",
-            "+-------+-------+",
-            "| Val 1 | Val 2 |",
-            "+-------+-------+"
-        ]
-        assert converter._is_ascii_table(table) is True
-        
-        # Not a table
-        not_table = [
-            "Just some text",
-            "with a | pipe character"
-        ]
-        assert converter._is_ascii_table(not_table) is False
-
-    def test_detect_lists(self):
-        """Test list detection from indentation."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        lines = [
-            "- First item",
-            "- Second item",
-            "1. Numbered item",
-            "2. Another numbered",
-            "Term",
-            "  Definition of term"
-        ]
-        
-        list_items = converter._detect_lists(lines)
-        
-        # Should detect unordered, ordered, and definition lists
-        assert len(list_items) > 0
-        assert any(item[1] == "ul" for item in list_items)
-        assert any(item[1] == "ol" for item in list_items)
-
-    def test_detect_code_blocks(self):
-        """Test code block detection."""
-        converter = HtmlToMdConverter("dummy.html")
-        
-        text = """Regular text here.
-
-    def function():
-        return True
-    
-More regular text.
-
-+---+---+
-| A | B |
-+---+---+
-
-Final text."""
-        
-        blocks = converter._detect_code_blocks(text)
-        
-        # Should detect at least the indented code and table
-        assert len(blocks) > 0
-        assert any(block[2] in ["code", "table"] for block in blocks)
-
-
-class TestLinkConversion:
-    """Tests for link conversion functionality."""
-
-    def test_convert_internal_links(self):
-        """Test conversion of internal section links."""
-        from bs4 import BeautifulSoup
-        
-        converter = HtmlToMdConverter("dummy.html")
-        
-        html = '<a href="#section-3.2.1">Section 3.2.1</a>'
-        element = BeautifulSoup(html, "html.parser")
-        
-        result = converter._convert_links(element)
-        
-        # Dots should be replaced with hyphens
-        assert "#section-3-2-1" in result
-        assert "Section 3.2.1" in result
-
-    def test_convert_rfc_references(self):
-        """Test conversion of RFC reference links."""
-        from bs4 import BeautifulSoup
-        
-        converter = HtmlToMdConverter("dummy.html")
-        
-        html = '<a href="./rfc5305">RFC 5305</a>'
-        element = BeautifulSoup(html, "html.parser")
-        
-        result = converter._convert_links(element)
-        
-        # Should convert to full URL
-        assert "https://www.rfc-editor.org/rfc/rfc5305" in result
-        assert "RFC 5305" in result or "RFC5305" in result
-
-    def test_convert_external_links(self):
-        """Test that external links are preserved."""
-        from bs4 import BeautifulSoup
-        
-        converter = HtmlToMdConverter("dummy.html")
-        
-        html = '<a href="https://example.com">Example</a>'
-        element = BeautifulSoup(html, "html.parser")
-        
-        result = converter._convert_links(element)
-        
-        # Should preserve external URL
-        assert "https://example.com" in result
-        assert "Example" in result
 
 
 class TestHtmlConverter:
@@ -233,5 +18,170 @@ class TestHtmlConverter:
         assert converter.html_file.name == "test.html"
         assert converter.soup is None
         assert converter.markdown_lines == []
-        assert converter.metadata == {}
-        assert converter.sections == []
+
+
+class TestPageBreakRemoval:
+    """Tests for page break removal functionality."""
+
+    def test_remove_page_breaks(self):
+        """Test that page headers and footers are removed."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = """Some content here
+Gredler, et al.              Standards Track                    [Page 1]
+More content
+RFC 7752                  BGP-LS                        March 2016
+Final content"""
+
+        result = converter._remove_page_breaks(text)
+
+        # Page header and footer should be removed
+        assert "Standards Track" not in result
+        assert "[Page 1]" not in result
+        assert "March 2016" not in result or "RFC 7752" not in result
+
+        # Content should remain
+        assert "Some content here" in result
+        assert "More content" in result
+        assert "Final content" in result
+
+    def test_preserve_paragraph_breaks(self):
+        """Test that intentional paragraph breaks are preserved."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = """First paragraph ends here.
+
+Second paragraph starts here."""
+
+        result = converter._remove_page_breaks(text)
+
+        # Empty line should be preserved
+        assert "\n\n" in result or result.count("\n") >= 2
+
+
+class TestLinkRemoval:
+    """Tests for HTML link removal."""
+
+    def test_remove_links(self):
+        """Test that HTML links are removed while preserving text."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = 'This is <a href="#section-1">Section 1</a> and <a href="http://example.com">example</a>.'
+
+        result = converter._remove_links(text)
+
+        # Links should be removed
+        assert "<a" not in result
+        assert "</a>" not in result
+        assert "href" not in result
+
+        # Text should be preserved
+        assert "Section 1" in result
+        assert "example" in result
+
+
+class TestEmptyLineCollapse:
+    """Tests for empty line collapsing."""
+
+    def test_collapse_empty_lines(self):
+        """Test that multiple empty lines are collapsed to single empty line."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = """First paragraph.
+
+
+
+Second paragraph.
+
+
+
+
+Third paragraph."""
+
+        result = converter._collapse_empty_lines(text)
+
+        # Should not have triple newlines
+        assert "\n\n\n" not in result
+
+        # Should still have double newlines (single empty line)
+        assert "\n\n" in result
+
+
+class TestTocExtraction:
+    """Tests for Table of Contents extraction and formatting."""
+
+    def test_extract_toc(self):
+        """Test TOC extraction from text."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = """Some content before TOC
+
+Table of Contents
+
+   1. Introduction ....................................................3
+      1.1. Requirements Language ......................................5
+   2. Motivation and Applicability ....................................5
+
+1. Introduction
+
+   This is the introduction text."""
+
+        result, formatted_toc, toc_start = converter._extract_toc(text)
+
+        # TOC should be found
+        assert toc_start >= 0
+
+        # Formatted TOC should contain markdown links
+        assert "[`1`](#section-1)" in result or "`1`" in result
+
+    def test_format_toc_entry(self):
+        """Test formatting of individual TOC entries."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # Test entry with leading spaces
+        line = "   1. Introduction ....................................................3"
+        result = converter._format_toc_entry(line)
+
+        # Should preserve leading spaces and create link
+        assert result is not None
+        assert "Introduction" in result
+        assert "`" in result  # Should be monospace
+
+
+class TestSectionProcessing:
+    """Tests for section header processing."""
+
+    def test_create_section_anchor(self):
+        """Test section anchor ID creation."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        # Test simple section number
+        assert converter._create_section_anchor("1") == "section-1"
+
+        # Test nested section number
+        assert converter._create_section_anchor("1.2.3") == "section-1-2-3"
+
+    def test_process_sections(self):
+        """Test section processing and wrapping."""
+        converter = HtmlToMdConverter("dummy.html")
+
+        text = """Pre-TOC content
+
+`Table of Contents`
+
+1. Introduction
+
+   This is introduction text.
+
+2. Background
+
+   This is background text."""
+
+        result = converter._process_sections(text, 2)
+
+        # Should contain section anchors
+        assert "section-1" in result or "<a id=" in result
+
+        # Should contain pre blocks
+        assert "```text" in result
+        assert "```" in result
