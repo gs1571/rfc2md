@@ -60,8 +60,11 @@ class HtmlToMdConverter:
         # Stage 3: Collapse multiple empty lines
         text_collapsed = self._collapse_empty_lines(text_without_page_breaks)
 
+        # Stage 4: Extract and format Table of Contents
+        text_with_formatted_toc, formatted_toc = self._extract_toc(text_collapsed)
+
         # TODO: Implement remaining stages
-        return text_collapsed
+        return text_with_formatted_toc
 
     def _extract_raw_text(self):
         """
@@ -177,3 +180,119 @@ class HtmlToMdConverter:
 
         self.logger.debug("Empty lines collapsed")
         return result
+
+    def _extract_toc(self, text):
+        """
+        Extract and format the Table of Contents from text.
+
+        This method finds the TOC section, extracts it from the main text,
+        and formats each entry as a monospace markdown link with preserved indentation.
+
+        Args:
+            text: Input text containing the Table of Contents
+
+        Returns:
+            Tuple of (text_with_formatted_toc, formatted_toc) where:
+            - text_with_formatted_toc: Text with old TOC replaced by formatted TOC
+            - formatted_toc: Formatted TOC as markdown string (for reference)
+        """
+        self.logger.debug("Extracting Table of Contents")
+
+        lines = text.split('\n')
+        toc_start = -1
+        toc_end = -1
+
+        # Find TOC start
+        for i, line in enumerate(lines):
+            if line.strip().startswith('Table of Contents'):
+                toc_start = i
+                break
+
+        if toc_start == -1:
+            self.logger.debug("No Table of Contents found")
+            return text, ""
+
+        # Find TOC end - next line that starts without leading spaces (next section)
+        for i in range(toc_start + 1, len(lines)):
+            line = lines[i]
+            # TOC ends when we hit a line that starts without spaces and is not empty
+            # and is not a TOC entry (doesn't have dots and page numbers)
+            if line and not line[0].isspace() and not re.search(r'\.+\s*\d+$', line):
+                toc_end = i
+                break
+
+        if toc_end == -1:
+            toc_end = len(lines)
+
+        # Extract TOC lines
+        toc_lines = lines[toc_start:toc_end]
+
+        # Format TOC entries
+        formatted_entries = ['`Table of Contents`', '']
+        for line in toc_lines[1:]:  # Skip "Table of Contents" header
+            if line.strip():  # Skip empty lines
+                formatted_entry = self._format_toc_entry(line)
+                if formatted_entry:
+                    formatted_entries.append(formatted_entry)
+                    formatted_entries.append('')  # Add empty line between entries
+
+        formatted_toc = '\n'.join(formatted_entries)
+        
+        # Replace old TOC with formatted TOC in the text
+        text_with_formatted_toc = '\n'.join(lines[:toc_start] + [formatted_toc] + lines[toc_end:])
+
+        self.logger.debug(f"Extracted TOC with {len(formatted_entries)} entries")
+
+        return text_with_formatted_toc, formatted_toc
+
+    def _format_toc_entry(self, line):
+        """
+        Format a single TOC entry as monospace markdown with clickable section link.
+
+        This method:
+        1. Preserves leading spaces from the original line
+        2. Removes trailing dots and page numbers from anywhere in the line
+        3. Finds section number pattern anywhere in the line and creates anchor
+        4. Handles multi-line entries (continuation lines without section numbers)
+
+        Args:
+            line: A single TOC entry line (may be continuation line)
+
+        Returns:
+            Formatted markdown string or None if line is empty after cleaning
+        """
+        # Extract leading spaces
+        leading_spaces = ''
+        for char in line:
+            if char == ' ':
+                leading_spaces += char
+            else:
+                break
+
+        # Remove trailing dots and page numbers from the end: \.+\s*\d*$
+        line_cleaned = re.sub(r'\.+\s*\d*$', '', line).strip()
+
+        if not line_cleaned:
+            return None
+
+        # Try to find section number pattern ANYWHERE in the line
+        # Pattern: digits separated by dots, followed by dot and space
+        match = re.search(r'(\d+(?:\.\d+)*)\.\s+', line_cleaned)
+
+        if match:
+            # This line has a section number - create anchor link
+            section_num = match.group(1)
+            # Get text after the section number
+            section_title = line_cleaned[match.end():]
+            
+            # Create anchor ID: section-1-1 (replace dots with dashes)
+            anchor_id = f"section-{section_num.replace('.', '-')}"
+
+            # Format as: `   `[`1`](#section-1)`. Title text`
+            formatted = f"`{leading_spaces}`[`{section_num}`](#{anchor_id})`. {section_title}`"
+        else:
+            # This is a continuation line without section number
+            # Just format it as monospace with preserved indentation
+            formatted = f"`{leading_spaces}{line_cleaned}`"
+
+        return formatted
