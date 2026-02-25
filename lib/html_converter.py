@@ -369,36 +369,46 @@ class HtmlToMdConverter:
         # Build the document with pre blocks and section headers
         result_parts = []
 
-        # Find where TOC ends (look for the line after last TOC entry)
-        toc_end_line = -1
+        # Determine where the first section starts
+        first_section_line = section_positions[0]["line_num"] if section_positions else len(lines)
+
+        # Handle content before first section based on whether TOC exists
         if toc_start_line >= 0:
-            # Find the end of TOC - look for first section header after TOC
-            for i in range(toc_start_line, len(lines)):
-                if section_positions and i >= section_positions[0]["line_num"]:
-                    toc_end_line = i
-                    break
+            # TOC exists - wrap content before TOC in pre block
+            if toc_start_line > 0:
+                pre_toc_content = "\n".join(lines[:toc_start_line])
+                result_parts.append("```text")
+                result_parts.append(pre_toc_content)
+                result_parts.append("```")
+                result_parts.append("")
 
-        # Wrap content before TOC in pre block
-        if toc_start_line > 0:
-            pre_toc_content = "\n".join(lines[:toc_start_line])
-            result_parts.append("```text")
-            result_parts.append(pre_toc_content)
-            result_parts.append("```")
-            result_parts.append("")
-
-        # Add TOC section (already formatted, between toc_start_line and toc_end_line)
-        if toc_start_line >= 0 and toc_end_line > toc_start_line:
-            toc_content = "\n".join(lines[toc_start_line:toc_end_line])
+            # Add TOC section (already formatted, between toc_start_line and first_section_line)
+            toc_content = "\n".join(lines[toc_start_line:first_section_line])
             result_parts.append(toc_content)
             result_parts.append("")
+        else:
+            # No TOC - wrap all content before first section in pre block
+            if first_section_line > 0:
+                pre_section_content = "\n".join(lines[:first_section_line])
+                result_parts.append("```text")
+                result_parts.append(pre_section_content)
+                result_parts.append("```")
+                result_parts.append("")
 
         # Check if we have sections
         if not section_positions:
-            # No sections found, wrap remaining text after TOC
-            remaining_content = "\n".join(lines[toc_end_line:]) if toc_end_line >= 0 else text
-            result_parts.append("```text")
-            result_parts.append(remaining_content)
-            result_parts.append("```")
+            # No sections found, wrap remaining text
+            if toc_start_line >= 0:
+                # Had TOC but no sections - wrap everything after TOC
+                remaining_content = "\n".join(lines[first_section_line:])
+            else:
+                # No TOC and no sections - everything already wrapped above
+                return "\n".join(result_parts)
+
+            if remaining_content.strip():
+                result_parts.append("```text")
+                result_parts.append(remaining_content)
+                result_parts.append("```")
             return "\n".join(result_parts)
 
         # Process each section

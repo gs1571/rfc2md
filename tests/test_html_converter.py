@@ -298,3 +298,175 @@ class TestTocFormatting:
         assert result2 is not None
         assert "Terminology`" in result2
         assert ". . ." not in result2
+
+    def test_convert_with_toc(self, tmp_path):
+        """Test conversion of RFC with Table of Contents (baseline test)."""
+        html_content = """<!DOCTYPE html>
+<html>
+<body>
+<pre>
+Internet Engineering Task Force (IETF)                       J. Harrison
+Request for Comments: 7752                                     J. Berger
+Category: Standards Track                                    M. Bartlett
+ISSN: 2070-1721                                      Metaswitch Networks
+                                                              March 2016
+
+
+                   BGP Link-State Information
+
+Abstract
+
+   This document specifies a method for exchanging link-state
+   information using the BGP routing protocol.
+
+Status of This Memo
+
+   This is an Internet Standards Track document.
+
+Table of Contents
+
+   1. Introduction ....................................................3
+   2. Terminology .....................................................6
+   3. Protocol Extensions .............................................8
+
+1. Introduction
+
+   This is the introduction text.
+
+2. Terminology
+
+   This section defines terminology.
+
+3. Protocol Extensions
+
+   This section describes protocol extensions.
+</pre>
+</body>
+</html>
+"""
+
+        html_file = tmp_path / "test_with_toc.html"
+        html_file.write_text(html_content)
+
+        converter = HtmlToMdConverter(html_file)
+        result = converter.convert()
+
+        # Check that pre-TOC content is wrapped
+        assert "```text" in result
+        assert "Abstract" in result
+        assert "Status of This Memo" in result
+        assert "Internet Engineering Task Force" in result
+
+        # Check that TOC is formatted with links
+        assert "Table of Contents" in result or "`Table of Contents`" in result
+        assert "[`1`](#section-1)" in result or "section-1" in result
+        assert "[`2`](#section-2)" in result or "section-2" in result
+        assert "[`3`](#section-3)" in result or "section-3" in result
+
+        # Check that sections are properly formatted
+        assert '<a id="section-1"></a> **`1. Introduction`**' in result
+        assert '<a id="section-2"></a> **`2. Terminology`**' in result
+        assert '<a id="section-3"></a> **`3. Protocol Extensions`**' in result
+
+        # Check that section content is wrapped
+        assert "This is the introduction text." in result
+        assert "This section defines terminology." in result
+        assert "This section describes protocol extensions." in result
+
+
+class TestConvertWithoutToc:
+    """Tests for converting RFC documents without Table of Contents."""
+
+    def test_convert_without_toc(self, tmp_path):
+        """Test conversion of RFC without Table of Contents."""
+        # Create minimal HTML without TOC
+        html_content = """<!DOCTYPE html>
+<html>
+<body>
+<pre>
+Internet Engineering Task Force (IETF)                       J. Harrison
+Request for Comments: 6119                                     J. Berger
+Category: Standards Track                                    M. Bartlett
+ISSN: 2070-1721                                      Metaswitch Networks
+                                                           February 2011
+
+
+                   IPv6 Traffic Engineering in IS-IS
+
+Abstract
+
+   This document specifies a method for exchanging IPv6 traffic
+   engineering information using the IS-IS routing protocol.
+
+Status of This Memo
+
+   This is an Internet Standards Track document.
+
+Copyright Notice
+
+   Copyright (c) 2011 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+1. Introduction
+
+   This is the introduction text.
+
+2. Requirements
+
+   These are the requirements.
+</pre>
+</body>
+</html>
+"""
+
+        html_file = tmp_path / "test_no_toc.html"
+        html_file.write_text(html_content)
+
+        converter = HtmlToMdConverter(html_file)
+        result = converter.convert()
+
+        # Check that pre-section content is wrapped
+        assert "```text" in result
+        assert "Abstract" in result
+        assert "Status of This Memo" in result
+        assert "Copyright Notice" in result
+        assert "Internet Engineering Task Force" in result
+
+        # Check that sections are properly formatted
+        assert '<a id="section-1"></a> **`1. Introduction`**' in result
+        assert '<a id="section-2"></a> **`2. Requirements`**' in result
+
+        # Check that section content is wrapped
+        assert "This is the introduction text." in result
+        assert "These are the requirements." in result
+
+    def test_convert_without_toc_no_sections(self, tmp_path):
+        """Test conversion of RFC without TOC and without sections."""
+        html_content = """<!DOCTYPE html>
+<html>
+<body>
+<pre>
+Abstract
+
+   This is the abstract.
+
+Status of This Memo
+
+   This is the status.
+</pre>
+</body>
+</html>
+"""
+
+        html_file = tmp_path / "test_no_toc_no_sections.html"
+        html_file.write_text(html_content)
+
+        converter = HtmlToMdConverter(html_file)
+        result = converter.convert()
+
+        # All content should be wrapped in a single pre block
+        assert "```text" in result
+        assert "Abstract" in result
+        assert "Status of This Memo" in result
+        assert "This is the abstract." in result
+        assert "This is the status." in result
