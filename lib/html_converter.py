@@ -57,8 +57,11 @@ class HtmlToMdConverter:
         # Stage 2: Remove page breaks
         text_without_page_breaks = self._remove_page_breaks(text_without_links)
 
+        # Stage 3: Collapse multiple empty lines
+        text_collapsed = self._collapse_empty_lines(text_without_page_breaks)
+
         # TODO: Implement remaining stages
-        return text_without_page_breaks
+        return text_collapsed
 
     def _extract_raw_text(self):
         """
@@ -150,4 +153,27 @@ class HtmlToMdConverter:
         result = '\n'.join(cleaned_lines)
         self.logger.debug(f"Removed {len(lines) - len(cleaned_lines)} page break lines")
 
+        return result
+
+    def _collapse_empty_lines(self, text):
+        """
+        Collapse multiple consecutive empty lines into a single empty line.
+
+        This method finds sequences of three or more newlines and replaces them
+        with exactly two newlines (one empty line), preserving document structure
+        while removing excessive whitespace.
+
+        Args:
+            text: Input text with potential multiple empty lines
+
+        Returns:
+            String with multiple empty lines collapsed to single empty lines
+        """
+        self.logger.debug("Collapsing multiple empty lines")
+
+        # Replace three or more consecutive newlines with exactly two
+        # This preserves single empty lines while removing multiple ones
+        result = re.sub(r'\n\n\n+', '\n\n', text)
+
+        self.logger.debug("Empty lines collapsed")
         return result
