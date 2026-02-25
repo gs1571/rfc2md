@@ -54,8 +54,11 @@ class HtmlToMdConverter:
         raw_text = self._extract_raw_text()
         text_without_links = self._remove_links(raw_text)
 
+        # Stage 2: Remove page breaks
+        text_without_page_breaks = self._remove_page_breaks(text_without_links)
+
         # TODO: Implement remaining stages
-        return text_without_links
+        return text_without_page_breaks
 
     def _extract_raw_text(self):
         """
@@ -108,3 +111,43 @@ class HtmlToMdConverter:
 
         self.logger.debug("HTML links removed")
         return text
+
+    def _remove_page_breaks(self, text):
+        """
+        Remove RFC page break patterns from text.
+
+        This method removes pagination artifacts including:
+        - Author/page number headers (e.g., "Author, et al.  Standards Track  [Page N]")
+        - RFC title headers (e.g., "RFC NNNN  Title  Month YYYY")
+        - Page separator lines (lines with only dashes)
+
+        Args:
+            text: Input text containing page breaks
+
+        Returns:
+            String with page breaks removed
+        """
+        self.logger.debug("Removing page breaks from text")
+
+        lines = text.split('\n')
+        cleaned_lines = []
+
+        for line in lines:
+            # Skip lines with "Standards Track" and "[Page N]" pattern
+            if re.search(r'Standards Track\s+\[Page \d+\]', line):
+                continue
+
+            # Skip lines with "RFC NNNN" and date pattern
+            if re.search(r'^RFC \d+\s+.+\s+\w+ \d{4}$', line):
+                continue
+
+            # Skip lines that are only dashes or form feed characters
+            if re.match(r'^[\s\-\f]+$', line) and len(line.strip('-').strip()) == 0:
+                continue
+
+            cleaned_lines.append(line)
+
+        result = '\n'.join(cleaned_lines)
+        self.logger.debug(f"Removed {len(lines) - len(cleaned_lines)} page break lines")
+
+        return result
