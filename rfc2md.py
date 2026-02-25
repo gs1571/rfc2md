@@ -139,7 +139,7 @@ def main():
 
                 try:
                     logger.info(f"Converting {rfc_num} to Markdown...")
-                    
+
                     # Detect file type by extension
                     if xml_file.suffix.lower() == ".html":
                         logger.info(f"Using HTML converter for {rfc_num}")
@@ -147,7 +147,7 @@ def main():
                     else:
                         logger.info(f"Using XML converter for {rfc_num}")
                         converter = XmlToMdConverter(xml_file)
-                    
+
                     markdown_content = converter.convert()
 
                     # Write Markdown to file
@@ -193,7 +193,7 @@ def main():
                 else:
                     logger.info("Using XML converter")
                     converter = XmlToMdConverter(xml_file)
-                
+
                 markdown_content = converter.convert()
 
                 # Write Markdown to file
@@ -231,7 +231,7 @@ def main():
             else:
                 logger.info("Using XML converter")
                 converter = XmlToMdConverter(xml_file)
-            
+
             markdown_content = converter.convert()
 
             # Write Markdown to file

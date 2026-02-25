@@ -289,8 +289,8 @@ class HtmlToMdConverter:
             # Get text after the section number
             section_title = line_cleaned[match.end() :]
 
-            # Create anchor ID: section-1-1 (replace dots with dashes)
-            anchor_id = f"section-{section_num.replace('.', '-')}"
+            # Create simple section anchor: #section-1-2-3
+            anchor_id = self._create_section_anchor(section_num)
 
             # Format as: `   `[`1`](#section-1)`. Title text`
             formatted = f"`{leading_spaces}`[`{section_num}`](#{anchor_id})`. {section_title}`"
@@ -303,17 +303,19 @@ class HtmlToMdConverter:
 
     def _create_section_anchor(self, section_num):
         """
-        Create an anchor ID from a section number.
+        Create a simple section anchor ID from section number.
 
-        Converts section numbers like "1.2.3" to anchor IDs like "section-1-2-3".
+        Converts section like "1.2.3" to anchor ID like "section-1-2-3".
 
         Args:
             section_num: Section number string (e.g., "1", "1.2", "3.2.1")
 
         Returns:
-            String containing the anchor ID
+            String containing the section anchor ID
         """
-        return f"section-{section_num.replace('.', '-')}"
+        # Replace dots with dashes and prepend "section-"
+        anchor_id = section_num.replace(".", "-")
+        return f"section-{anchor_id}"
 
     def _process_sections(self, text, toc_start_line):
         r"""
@@ -323,7 +325,7 @@ class HtmlToMdConverter:
         1. Wraps all text before TOC in a pre block
         2. Finds all section headers matching pattern: ^(\d+(?:\.\d+)*)\.\s+(.+)$
         3. Extracts headers from text
-        4. Creates monospace headers with anchors: `<a id="section-X-Y"></a>X.Y. Title`
+        4. Creates headers with HTML anchors: <a id="section-X-Y"></a> **`X.Y. Title`**
         5. Wraps text segments between sections in ```text``` blocks
         6. Assembles document: pre block (before TOC) → TOC → pre block → header → pre block → header → ...
 
@@ -394,9 +396,10 @@ class HtmlToMdConverter:
             section_title = section_info["title"]
             section_line = section_info["line_num"]
 
-            # Create section header with anchor
+            # Create section header with HTML anchor and bold monospace text
             anchor_id = self._create_section_anchor(section_num)
-            section_header = f'`<a id="{anchor_id}"></a>{section_num}. {section_title}`'
+            # Format: <a id="section-1"></a> **`1. Introduction`**
+            section_header = f'<a id="{anchor_id}"></a> **`{section_num}. {section_title}`**'
             result_parts.append(section_header)
             result_parts.append("")
 
