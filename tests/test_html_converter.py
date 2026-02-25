@@ -470,3 +470,231 @@ Status of This Memo
         assert "Status of This Memo" in result
         assert "This is the abstract." in result
         assert "This is the status." in result
+
+
+class TestTocWithContentsHeader:
+    """Tests for TOC extraction with 'Contents' header (RFC3209 format)."""
+
+    def test_extract_toc_with_contents_header(self):
+        """Test TOC extraction when header is 'Contents' instead of 'Table of Contents'."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Some text before
+
+Contents
+
+   1      Introduction   ..........................................   3
+   1.1    Background  .............................................   4
+
+1. Introduction
+"""
+        result, formatted_toc, toc_start = converter._extract_toc(text)
+
+        assert toc_start == 2  # Line where "Contents" appears
+        assert "`Contents`" in formatted_toc
+        assert "[`1`](#section-1)`. Introduction`" in formatted_toc
+        assert "[`1.1`](#section-1-1)`. Background`" in formatted_toc
+
+    def test_extract_toc_with_table_of_contents_header(self):
+        """Test TOC extraction with standard 'Table of Contents' header (regression test)."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Some text before
+
+Table of Contents
+
+   1      Introduction   ..........................................   3
+   1.1    Background  .............................................   4
+
+1. Introduction
+"""
+        result, formatted_toc, toc_start = converter._extract_toc(text)
+
+        assert toc_start == 2
+        assert "`Table of Contents`" in formatted_toc
+        assert "[`1`](#section-1)`. Introduction`" in formatted_toc
+
+
+
+class TestPageBreakRemovalExtended:
+    """Extended tests for page break removal with various RFC formats."""
+
+    def test_remove_page_breaks_best_current_practice(self):
+        """Test removal of Best Current Practice page break format."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Some text before
+
+Narten & Alvestrand      Best Current Practice                  [Page 1]
+
+Some text after"""
+
+        result = converter._remove_page_breaks(text)
+
+        # Page break should be completely removed
+        assert "[Page 1]" not in result
+        assert "Best Current Practice" not in result
+        # Text should be continuous
+        assert "Some text before" in result
+        assert "Some text after" in result
+
+    def test_remove_page_breaks_informational_format(self):
+        """Test removal of informational RFC page break format."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Content before
+
+Seedorf & Burger             Informational                      [Page 2]
+
+Content after"""
+
+        result = converter._remove_page_breaks(text)
+
+        assert "[Page 2]" not in result
+        assert "Informational" not in result
+        assert "Content before" in result
+        assert "Content after" in result
+
+    def test_remove_page_breaks_multiple(self):
+        """Test removal of multiple page breaks."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Section 1
+
+Author Name              Category                               [Page 1]
+
+Section 2
+
+Author Name              Category                               [Page 2]
+
+Section 3"""
+
+        result = converter._remove_page_breaks(text)
+
+        assert "[Page 1]" not in result
+        assert "[Page 2]" not in result
+        assert "Category" not in result
+        # All sections should be present
+        assert "Section 1" in result
+        assert "Section 2" in result
+        assert "Section 3" in result
+
+    def test_remove_page_breaks_with_varying_spacing(self):
+        """Test removal of page breaks with different spacing patterns."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Text 1
+
+Smith & Jones            Standards Track                        [Page 10]
+
+Text 2
+
+Brown                    Experimental                           [Page 100]
+
+Text 3"""
+
+        result = converter._remove_page_breaks(text)
+
+        assert "[Page 10]" not in result
+        assert "[Page 100]" not in result
+        assert "Standards Track" not in result
+        assert "Experimental" not in result
+
+    def test_remove_page_breaks_preserves_content(self):
+        """Test that page break removal doesn't affect actual content."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """This is important content about [Page numbers] in documents.
+
+Author                   Status                                 [Page 5]
+
+More content that mentions Page 5 in the text."""
+
+        result = converter._remove_page_breaks(text)
+
+        # Page break line should be removed
+        assert "Author                   Status" not in result
+        # But content mentioning pages should remain
+        assert "[Page numbers]" in result
+        assert "Page 5 in the text" in result
+
+    def test_remove_page_breaks_empty_text(self):
+        """Test page break removal with empty text."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = ""
+
+        result = converter._remove_page_breaks(text)
+
+        assert result == ""
+
+    def test_remove_page_breaks_no_breaks(self):
+        """Test text without page breaks remains unchanged."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """This is a document
+with multiple lines
+but no page breaks."""
+
+        result = converter._remove_page_breaks(text)
+
+        assert result == text
+
+    def test_remove_page_breaks_in_toc(self):
+        """Test removal of page breaks that appear inside TOC (RFC4655/RFC7938 case)."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Table of Contents
+
+   1. Introduction . . . . . . . . . . . . . . . . . . . . . . . .   3
+   2. Terminology  . . . . . . . . . . . . . . . . . . . . . . . .   4
+
+Farrel, et al.               Informational                      [Page 1]
+
+      4.5. Network Element Lacks Control Plane  . . . . . . . . . .   8
+      4.6. Backup Path Computation  . . . . . . . . . . . . . . . .   8
+
+1. Introduction"""
+
+        result = converter._remove_page_breaks(text)
+
+        # Page break should be removed
+        assert "[Page 1]" not in result
+        assert "Farrel, et al." not in result
+        # TOC entries should be preserved and continuous
+        assert "1. Introduction" in result
+        assert "2. Terminology" in result
+        assert "4.5. Network Element" in result
+        assert "4.6. Backup Path" in result
+
+    def test_remove_page_breaks_et_al_format(self):
+        """Test removal of page breaks with 'et al.' in author names."""
+        converter = HtmlToMdConverter("dummy.html")
+        text = """Content before
+
+Farrel, et al.               Informational                      [Page 1]
+
+Content after"""
+
+        result = converter._remove_page_breaks(text)
+
+        assert "[Page 1]" not in result
+        assert "Farrel, et al." not in result
+        assert "Informational" not in result
+        assert "Content before" in result
+        assert "Content after" in result
+
+    def test_remove_page_breaks_various_categories(self):
+        """Test removal of page breaks with various RFC categories."""
+        converter = HtmlToMdConverter("dummy.html")
+        categories = [
+            "Standards Track",
+            "Informational",
+            "Best Current Practice",
+            "Experimental",
+            "Historic",
+        ]
+
+        for i, category in enumerate(categories, 1):
+            text = f"""Text before
+
+Author Name              {category:40}[Page {i}]
+
+Text after"""
+
+            result = converter._remove_page_breaks(text)
+
+            assert f"[Page {i}]" not in result
+            assert category not in result
+            assert "Text before" in result
+            assert "Text after" in result

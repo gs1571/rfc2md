@@ -126,7 +126,12 @@ class HtmlToMdConverter:
         Remove RFC page break patterns from text.
 
         This method removes pagination artifacts including:
-        - Author/page number headers (e.g., "Author, et al.  Standards Track  [Page N]")
+        - Author/page number headers with various RFC categories:
+          * "Author Name              Standards Track                [Page N]"
+          * "Seedorf & Burger             Informational              [Page N]"
+          * "Narten & Alvestrand      Best Current Practice          [Page N]"
+          * "Author, et al.               Experimental               [Page N]"
+          Pattern: text + 10+ spaces + text + spaces + [Page N]
         - RFC title headers (e.g., "RFC NNNN  Title  Month YYYY")
         - Page separator lines (lines with only dashes)
 
@@ -142,8 +147,10 @@ class HtmlToMdConverter:
         cleaned_lines = []
 
         for line in lines:
-            # Skip lines with "Standards Track" and "[Page N]" pattern
-            if re.search(r"Standards Track\s+\[Page \d+\]", line):
+            # Skip lines matching page break pattern:
+            # text + 6+ spaces + text + spaces + [Page N]
+            # This matches all RFC status categories (Standards Track, Informational, etc.)
+            if re.match(r"^.+\s{6,}.+\s+\[Page \d+\]$", line):
                 continue
 
             # Skip lines with "RFC NNNN" and date pattern
@@ -206,10 +213,14 @@ class HtmlToMdConverter:
         toc_start = -1
         toc_end = -1
 
-        # Find TOC start
+        # Find TOC start - support both "Table of Contents" and "Contents"
+        toc_header = None
         for i, line in enumerate(lines):
-            if line.strip().startswith("Table of Contents"):
+            stripped = line.strip()
+            # Check for "Table of Contents" or just "Contents"
+            if stripped.startswith("Table of Contents") or stripped == "Contents":
                 toc_start = i
+                toc_header = stripped
                 break
 
         if toc_start == -1:
@@ -232,7 +243,9 @@ class HtmlToMdConverter:
         toc_lines = lines[toc_start:toc_end]
 
         # Format TOC entries
-        formatted_entries = ["`Table of Contents`", ""]
+        # Use the actual header found, or default to "Table of Contents"
+        header_text = toc_header if toc_header else "Table of Contents"
+        formatted_entries = [f"`{header_text}`", ""]
         for line in toc_lines[1:]:  # Skip "Table of Contents" header
             if line.strip():  # Skip empty lines
                 formatted_entry = self._format_toc_entry(line)
@@ -258,7 +271,7 @@ class HtmlToMdConverter:
         2. Removes trailing dots and page numbers from anywhere in the line
         3. Removes alignment dots (e.g., ". . . . . .")
         4. Finds section number pattern and creates anchor
-        5. Handles both formats: "1.Title" and "1. Title"
+        5. Handles multiple RFC formats (RFC3209, RFC7752, RFC8402)
         6. Handles multi-line entries (continuation lines without section numbers)
 
         Args:
@@ -275,6 +288,34 @@ class HtmlToMdConverter:
             else:
                 break
 
+        # Clean the line (remove dots and page numbers)
+        line_cleaned = self._clean_toc_line(line)
+
+        if not line_cleaned:
+            return None
+
+        # Try to parse as different RFC formats
+        result = self._try_parse_rfc3209_format(line_cleaned, leading_spaces)
+        if result:
+            return result
+
+        result = self._try_parse_standard_format(line_cleaned, leading_spaces)
+        if result:
+            return result
+
+        # No section number found - this is a continuation line
+        return f"`{leading_spaces}{line_cleaned}`"
+
+    def _clean_toc_line(self, line):
+        """
+        Clean TOC line by removing trailing dots and page numbers.
+
+        Args:
+            line: Raw TOC line
+
+        Returns:
+            Cleaned line string
+        """
         # Step 1: Remove trailing dots and page numbers
         # This handles RFC7752 format: "Introduction....3"
         line_cleaned = re.sub(r"\.+\s*\d*$", "", line).strip()
@@ -283,34 +324,49 @@ class HtmlToMdConverter:
         # Pattern matches: space, dot, (space dot)+ at end of line
         line_cleaned = re.sub(r"\s*(\.\s+)+\.\s*$", "", line_cleaned).strip()
 
-        if not line_cleaned:
-            return None
+        return line_cleaned
 
-        # Try to find section number pattern ANYWHERE in the line
-        # Support both formats:
-        # - "1. Title" (dot with space)
-        # - "1.Title" (dot without space)
-        match = re.search(r"(\d+(?:\.\d+)*)\.(\s*)", line_cleaned)
+    def _try_parse_rfc3209_format(self, line_cleaned, leading_spaces):
+        """
+        Try to parse TOC entry in RFC3209 format: "1      Title" or "1.1    Title"
+        (section number followed by multiple spaces, no trailing period).
 
+        Args:
+            line_cleaned: Cleaned TOC line
+            leading_spaces: Leading spaces from original line
+
+        Returns:
+            Formatted string if match found, None otherwise
+        """
+        # RFC3209 format: section number followed by 2+ spaces (no trailing period)
+        match = re.match(r"^(\d+(?:\.\d+)*)\s{2,}(.+)$", line_cleaned)
         if match:
-            # This line has a section number - create anchor link
             section_num = match.group(1)
-
-            # Get text after the section number and dot
-            # Handle both "1. Title" and "1.Title"
-            section_title = line_cleaned[match.end() :].strip()
-
-            # Create simple section anchor: #section-1-2-3
+            section_title = match.group(2).strip()
             anchor_id = self._create_section_anchor(section_num)
+            return f"`{leading_spaces}`[`{section_num}`](#{anchor_id})`. {section_title}`"
+        return None
 
-            # Format as: `   `[`1`](#section-1)`. Title text`
-            formatted = f"`{leading_spaces}`[`{section_num}`](#{anchor_id})`. {section_title}`"
-        else:
-            # This is a continuation line without section number
-            # Just format it as monospace with preserved indentation
-            formatted = f"`{leading_spaces}{line_cleaned}`"
+    def _try_parse_standard_format(self, line_cleaned, leading_spaces):
+        """
+        Try to parse TOC entry in standard format: "1. Title" or "1.1. Title"
+        (section number followed by period and optional space).
 
-        return formatted
+        Args:
+            line_cleaned: Cleaned TOC line
+            leading_spaces: Leading spaces from original line
+
+        Returns:
+            Formatted string if match found, None otherwise
+        """
+        # Standard format: section number followed by period
+        match = re.match(r"^(\d+(?:\.\d+)*)\.(\s*)(.*)$", line_cleaned)
+        if match:
+            section_num = match.group(1)
+            section_title = match.group(3).strip()
+            anchor_id = self._create_section_anchor(section_num)
+            return f"`{leading_spaces}`[`{section_num}`](#{anchor_id})`. {section_title}`"
+        return None
 
     def _create_section_anchor(self, section_num):
         """
