@@ -28,18 +28,19 @@ class XmlToMdConverter:
         """
         self.xml_file = Path(xml_file)
         self.logger = logging.getLogger(__name__)
-        self.tree = None
-        self.root = None
-        self.markdown_lines = []
-        self.section_depth = 0
-        self.toc_entries = []  # For TOC generation
-        self.section_id_to_anchor = {}  # Mapping from section pn to anchor
+        self.tree: etree._ElementTree | None = None
+        self.root: etree._Element | None = None
+        self.markdown_lines: list[str] = []
+        self.section_depth: int = 0
+        self.toc_entries: list[dict] = []  # For TOC generation
+        self.section_id_to_anchor: dict[str, str] = {}  # Mapping from section pn to anchor
 
     def _build_section_anchor_mapping(self):
         """
         Build mapping from section pn to anchor by pre-scanning all sections.
         This must be called before TOC generation.
         """
+        assert self.root is not None, "XML root must be parsed before building anchor mapping"
         # Process middle sections
         middle = self.root.find("middle")
         if middle is not None:
@@ -87,6 +88,9 @@ class XmlToMdConverter:
         except Exception as e:
             raise ValueError(f"Error parsing XML: {e}") from e
 
+        # Ensure root is not None
+        assert self.root is not None, "Failed to parse XML root element"
+
         # Extract namespace
         self.ns = {"rfc": "http://www.w3.org/2001/XInclude"} if self.root.nsmap else {}
 
@@ -108,6 +112,7 @@ class XmlToMdConverter:
 
     def _process_front(self):
         """Process the <front> section containing metadata and abstract."""
+        assert self.root is not None, "XML root must be parsed before processing front"
         front = self.root.find("front")
         if front is None:
             return
@@ -278,6 +283,7 @@ class XmlToMdConverter:
         Returns:
             List of markdown lines for TOC
         """
+        assert self.root is not None, "XML root must be parsed before generating TOC"
         toc_lines = []
         toc_lines.append("## Table of Contents")
         toc_lines.append("")
@@ -380,6 +386,7 @@ class XmlToMdConverter:
 
     def _process_middle(self):
         """Process the <middle> section containing main content."""
+        assert self.root is not None, "XML root must be parsed before processing middle"
         middle = self.root.find("middle")
         if middle is None:
             return
@@ -390,6 +397,7 @@ class XmlToMdConverter:
 
     def _process_back(self):
         """Process the <back> section containing references and appendices."""
+        assert self.root is not None, "XML root must be parsed before processing back"
         back = self.root.find("back")
         if back is None:
             return

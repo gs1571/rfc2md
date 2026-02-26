@@ -30,8 +30,8 @@ class HtmlToMdConverter:
         """
         self.html_file = Path(html_file)
         self.logger = logging.getLogger(__name__)
-        self.soup = None
-        self.markdown_lines = []
+        self.soup: BeautifulSoup | None = None
+        self.markdown_lines: list[str] = []
 
     def convert(self):
         """
@@ -49,6 +49,9 @@ class HtmlToMdConverter:
             self.soup = BeautifulSoup(html_content, "html.parser")
         except Exception as e:
             raise ValueError(f"Error parsing HTML: {e}") from e
+
+        # Ensure soup is not None
+        assert self.soup is not None, "Failed to parse HTML"
 
         # Extract raw text and remove links
         raw_text = self._extract_raw_text()
@@ -79,6 +82,7 @@ class HtmlToMdConverter:
         Returns:
             String containing all extracted text from pre blocks
         """
+        assert self.soup is not None, "HTML must be parsed before extracting text"
         self.logger.debug("Extracting raw text from pre blocks")
 
         # Find all pre blocks
@@ -408,7 +412,7 @@ class HtmlToMdConverter:
         lines = text.split("\n")
 
         # Find all section headers with their positions
-        section_positions = []
+        section_positions: list[dict[str, int | str]] = []
         section_pattern = re.compile(r"^(\d+(?:\.\d+)*)\.\s+(.+)$")
 
         for i, line in enumerate(lines):
@@ -426,7 +430,9 @@ class HtmlToMdConverter:
         result_parts = []
 
         # Determine where the first section starts
-        first_section_line = section_positions[0]["line_num"] if section_positions else len(lines)
+        first_section_line: int = (
+            int(section_positions[0]["line_num"]) if section_positions else len(lines)
+        )
 
         # Handle content before first section based on whether TOC exists
         if toc_start_line >= 0:
@@ -469,9 +475,9 @@ class HtmlToMdConverter:
 
         # Process each section
         for idx, section_info in enumerate(section_positions):
-            section_num = section_info["section_num"]
-            section_title = section_info["title"]
-            section_line = section_info["line_num"]
+            section_num = str(section_info["section_num"])
+            section_title = str(section_info["title"])
+            section_line = int(section_info["line_num"])
 
             # Create section header with HTML anchor and bold monospace text
             anchor_id = self._create_section_anchor(section_num)
@@ -482,7 +488,7 @@ class HtmlToMdConverter:
 
             # Get content between this section and next section (or end of document)
             if idx < len(section_positions) - 1:
-                next_section_line = section_positions[idx + 1]["line_num"]
+                next_section_line = int(section_positions[idx + 1]["line_num"])
                 content_lines = lines[section_line + 1 : next_section_line]
             else:
                 content_lines = lines[section_line + 1 :]
