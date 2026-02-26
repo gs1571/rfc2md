@@ -22,57 +22,47 @@ def compare_files(generated_file: Path, snapshot_file: Path) -> bool:
     Returns:
         True if files are identical, False otherwise
     """
-    generated_content = generated_file.read_text(encoding="utf-8")
-    snapshot_content = snapshot_file.read_text(encoding="utf-8")
-    return generated_content == snapshot_content
+    return generated_file.read_text(encoding="utf-8") == snapshot_file.read_text(encoding="utf-8")
 
 
-def get_diff(generated_file: Path, snapshot_file: Path, max_lines: int = 50) -> str:
+def get_diff(generated_file: Path, snapshot_file: Path, max_lines: int = 100) -> str:
     """
     Get unified diff between generated and snapshot files with color coding.
 
     Args:
         generated_file: Path to generated MD file
         snapshot_file: Path to snapshot MD file
-        max_lines: Maximum number of diff lines to show (default: 50)
+        max_lines: Maximum number of diff lines to show (default: 100)
 
     Returns:
         Unified diff as string with context lines, truncated if too long
     """
-    generated_lines = generated_file.read_text(encoding="utf-8").splitlines(keepends=True)
-    snapshot_lines = snapshot_file.read_text(encoding="utf-8").splitlines(keepends=True)
-
     diff = list(
         difflib.unified_diff(
-            snapshot_lines,
-            generated_lines,
+            snapshot_file.read_text(encoding="utf-8").splitlines(keepends=True),
+            generated_file.read_text(encoding="utf-8").splitlines(keepends=True),
             fromfile=f"expected/{snapshot_file.name}",
             tofile=f"actual/{generated_file.name}",
             n=3,  # Show 3 lines of context around changes
         )
     )
 
+    # Truncate diff if too long
+    if len(diff) > max_lines:
+        diff = diff[:max_lines]
+        diff.append(f"... (diff truncated, showing first {max_lines} lines)\n")
+
     # Add color coding to diff lines
-    colored_diff = []
+    result = []
     for line in diff:
         if line.startswith("-") and not line.startswith("---"):
-            # Red for removed lines
-            colored_diff.append(f"\033[31m{line}\033[0m")
+            result.append(f"\033[31m{line}\033[0m")  # Red for removed
         elif line.startswith("+") and not line.startswith("+++"):
-            # Green for added lines
-            colored_diff.append(f"\033[32m{line}\033[0m")
+            result.append(f"\033[32m{line}\033[0m")  # Green for added
         else:
-            colored_diff.append(line)
+            result.append(line)
 
-    # Truncate diff if too long
-    if len(colored_diff) > max_lines:
-        truncated_diff = colored_diff[:max_lines]
-        truncated_diff.append(
-            f"... (diff truncated, showing first {max_lines} of {len(colored_diff)} lines)\n"
-        )
-        return "".join(truncated_diff)
-
-    return "".join(colored_diff)
+    return "".join(result)
 
 
 def get_regeneration_command(source_file: Path, snapshot_file: Path) -> str:
@@ -110,34 +100,22 @@ class TestXmlConversion:
         # Act - convert using XmlToMdConverter
         print(f"\n[TEST] Converting {rfc_name}...")
         converter = XmlToMdConverter(xml_file)
-        markdown_content = converter.convert()
-        output_file.write_text(markdown_content, encoding="utf-8")
+        output_file.write_text(converter.convert(), encoding="utf-8")
 
         # Assert
         if not compare_files(output_file, snapshot_file):
-            diff_text = get_diff(output_file, snapshot_file)
-            regen_cmd = get_regeneration_command(xml_file, snapshot_file)
-
-            error_msg = (
-                f"\n\n"
-                f"╔{'═'*78}╗\n"
-                f"║ SNAPSHOT MISMATCH: {rfc_name:<60} ║\n"
-                f"╚{'═'*78}╝\n"
-                f"\n"
-                f"Source:   {xml_file}\n"
-                f"Snapshot: {snapshot_file}\n"
-                f"\n"
-                f"{'─'*80}\n"
-                f"DIFF (expected vs actual):\n"
-                f"{'─'*80}\n"
-                f"{diff_text}\n"
-                f"{'─'*80}\n"
-                f"\n"
-                f"To update the snapshot, run:\n"
-                f"  {regen_cmd}\n"
-                f"\n"
-            )
-            print(error_msg)
+            print(f"\n\n╔{'═'*78}╗")
+            print(f"║ SNAPSHOT MISMATCH: {rfc_name:<60} ║")
+            print(f"╚{'═'*78}╝\n")
+            print(f"Source:   {xml_file}")
+            print(f"Snapshot: {snapshot_file}\n")
+            print(f"{'─'*80}")
+            print("DIFF (expected vs actual):")
+            print(f"{'─'*80}")
+            print(get_diff(output_file, snapshot_file))
+            print(f"{'─'*80}\n")
+            print("To update the snapshot, run:")
+            print(f"  {get_regeneration_command(xml_file, snapshot_file)}\n")
             pytest.fail(f"Snapshot mismatch for {rfc_name}")
         else:
             print(f"[PASS] {rfc_name} - snapshot matches")
@@ -164,34 +142,22 @@ class TestHtmlConversion:
         # Act - convert using HtmlToMdConverter
         print(f"\n[TEST] Converting {rfc_name}...")
         converter = HtmlToMdConverter(html_file)
-        markdown_content = converter.convert()
-        output_file.write_text(markdown_content, encoding="utf-8")
+        output_file.write_text(converter.convert(), encoding="utf-8")
 
         # Assert
         if not compare_files(output_file, snapshot_file):
-            diff_text = get_diff(output_file, snapshot_file)
-            regen_cmd = get_regeneration_command(html_file, snapshot_file)
-
-            error_msg = (
-                f"\n\n"
-                f"╔{'═'*78}╗\n"
-                f"║ SNAPSHOT MISMATCH: {rfc_name:<60} ║\n"
-                f"╚{'═'*78}╝\n"
-                f"\n"
-                f"Source:   {html_file}\n"
-                f"Snapshot: {snapshot_file}\n"
-                f"\n"
-                f"{'─'*80}\n"
-                f"DIFF (expected vs actual):\n"
-                f"{'─'*80}\n"
-                f"{diff_text}\n"
-                f"{'─'*80}\n"
-                f"\n"
-                f"To update the snapshot, run:\n"
-                f"  {regen_cmd}\n"
-                f"\n"
-            )
-            print(error_msg)
+            print(f"\n\n╔{'═'*78}╗")
+            print(f"║ SNAPSHOT MISMATCH: {rfc_name:<60} ║")
+            print(f"╚{'═'*78}╝\n")
+            print(f"Source:   {html_file}")
+            print(f"Snapshot: {snapshot_file}\n")
+            print(f"{'─'*80}")
+            print("DIFF (expected vs actual):")
+            print(f"{'─'*80}")
+            print(get_diff(output_file, snapshot_file))
+            print(f"{'─'*80}\n")
+            print("To update the snapshot, run:")
+            print(f"  {get_regeneration_command(html_file, snapshot_file)}\n")
             pytest.fail(f"Snapshot mismatch for {rfc_name}")
         else:
             print(f"[PASS] {rfc_name} - snapshot matches")

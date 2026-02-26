@@ -33,6 +33,41 @@ class XmlToMdConverter:
         self.markdown_lines = []
         self.section_depth = 0
         self.toc_entries = []  # For TOC generation
+        self.section_id_to_anchor = {}  # Mapping from section pn to anchor
+
+    def _build_section_anchor_mapping(self):
+        """
+        Build mapping from section pn to anchor by pre-scanning all sections.
+        This must be called before TOC generation.
+        """
+        # Process middle sections
+        middle = self.root.find("middle")
+        if middle is not None:
+            for section in middle.findall("section"):
+                self._collect_section_anchors(section)
+
+        # Process back sections
+        back = self.root.find("back")
+        if back is not None:
+            for section in back.findall("section"):
+                self._collect_section_anchors(section)
+
+    def _collect_section_anchors(self, section):
+        """
+        Recursively collect pn to anchor mappings from section tree.
+
+        Args:
+            section: XML section element
+        """
+        pn = section.get("pn", "")
+        anchor = section.get("anchor", "")
+
+        if pn and anchor:
+            self.section_id_to_anchor[pn] = anchor
+
+        # Process nested sections recursively
+        for subsection in section.findall("section"):
+            self._collect_section_anchors(subsection)
 
     def convert(self):
         """
@@ -57,6 +92,9 @@ class XmlToMdConverter:
 
         # Process document sections
         self._process_front()
+
+        # Build section anchor mapping BEFORE generating TOC
+        self._build_section_anchor_mapping()
 
         # Generate and insert TOC after front matter
         toc_lines = self._generate_toc()
@@ -95,6 +133,43 @@ class XmlToMdConverter:
                 if stream:
                     self.markdown_lines.append(f"*Stream: {stream}*")
                 self.markdown_lines.append("")
+
+        # Extract document metadata from root element
+        metadata_fields = []
+
+        category = self.root.get("category", "")
+        if category:
+            metadata_fields.append(f"**Category:** {category}")
+
+        obsoletes = self.root.get("obsoletes", "")
+        if obsoletes:
+            metadata_fields.append(f"**Obsoletes:** {obsoletes}")
+
+        updates = self.root.get("updates", "")
+        if updates:
+            metadata_fields.append(f"**Updates:** {updates}")
+
+        submission_type = self.root.get("submissionType", "")
+        if submission_type:
+            metadata_fields.append(f"**Submission Type:** {submission_type}")
+
+        consensus = self.root.get("consensus", "")
+        if consensus:
+            metadata_fields.append(f"**Consensus:** {consensus}")
+
+        ipr = self.root.get("ipr", "")
+        if ipr:
+            metadata_fields.append(f"**IPR:** {ipr}")
+
+        doc_name = self.root.get("docName", "")
+        if doc_name:
+            metadata_fields.append(f"**Doc Name:** {doc_name}")
+
+        # Add metadata fields if any exist
+        if metadata_fields:
+            for field in metadata_fields:
+                self.markdown_lines.append(field)
+            self.markdown_lines.append("")
 
         # Extract authors
         authors = front.findall("author")
@@ -267,9 +342,13 @@ class XmlToMdConverter:
                     title = title_xref.get("derivedContent", "") or title_xref.text or ""
 
                     if section_num and title:
-                        toc_lines.append(f"{indent}- [{section_num}. {title}](#{target})")
+                        toc_lines.append(
+                            f"{indent}- [{section_num}. {title}](#{self.section_id_to_anchor.get(target, target)})"
+                        )
                     elif title:
-                        toc_lines.append(f"{indent}- [{title}](#{target})")
+                        toc_lines.append(
+                            f"{indent}- [{title}](#{self.section_id_to_anchor.get(target, target)})"
+                        )
                 elif len(xrefs) == 1:
                     # Only one xref - could be unnumbered section
                     xref = xrefs[0]
@@ -277,7 +356,9 @@ class XmlToMdConverter:
                     # Try derivedContent first, then text content
                     title = xref.get("derivedContent", "") or xref.text or ""
                     if title:
-                        toc_lines.append(f"{indent}- [{title}](#{target})")
+                        toc_lines.append(
+                            f"{indent}- [{title}](#{self.section_id_to_anchor.get(target, target)})"
+                        )
 
             # Process nested lists
             nested_ul = li.find("ul")
