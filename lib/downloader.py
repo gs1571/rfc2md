@@ -89,20 +89,29 @@ def download_rfc_html(rfc_number, output_dir):
         return None
 
 
-def download_rfc(rfc_number, output_dir, fetch_pdf=False):
+def download_rfc(rfc_number, output_dir, extra_formats=None):
     """
-    Download RFC XML and optionally PDF from rfc-editor.org.
+    Download RFC XML and optionally additional formats from rfc-editor.org.
     Falls back to HTML if XML is not available.
 
     Args:
         rfc_number: Normalized RFC number (e.g., "rfc9514")
         output_dir: Path object for output directory
-        fetch_pdf: Whether to download PDF version
+        extra_formats: List of additional formats to download (pdf, text, xml, html)
 
     Returns:
-        Path to downloaded XML or HTML file, or None if download failed
+        Tuple of (primary_file, extra_files_dict) where:
+        - primary_file: Path to downloaded XML or HTML file, or None if download failed
+        - extra_files_dict: Dictionary mapping format names to their file paths
     """
     logger = logging.getLogger(__name__)
+
+    # Initialize extra_formats if not provided
+    if extra_formats is None:
+        extra_formats = []
+
+    # Dictionary to store extra downloaded files
+    extra_files = {}
 
     # Extract numeric part for URL construction
     rfc_num = rfc_number.replace("rfc", "")
@@ -168,95 +177,147 @@ def download_rfc(rfc_number, output_dir, fetch_pdf=False):
         logger.error(f"Error writing file {xml_file}: {e}")
         return None
 
-    # Download PDF if requested (works for both XML and HTML fallback)
-    if fetch_pdf:
-        pdf_file = output_dir / f"rfc{rfc_num}.pdf"
+    # Download additional formats if requested
+    for fmt in extra_formats:
+        if fmt == "pdf":
+            pdf_file = output_dir / f"rfc{rfc_num}.pdf"
+            pdf_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.pdf"
+            logger.info(f"Downloading PDF from: {pdf_url}")
 
-        # Try primary PDF URL first
-        pdf_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.pdf"
-        logger.info(f"Downloading PDF from: {pdf_url}")
+            try:
+                response = requests.get(pdf_url, timeout=30, stream=True)
+                response.raise_for_status()
 
-        try:
-            response = requests.get(pdf_url, timeout=30, stream=True)
-            response.raise_for_status()
+                total_size = int(response.headers.get("content-length", 0))
+                downloaded = 0
+                start_time = time.time()
 
-            # Download PDF
-            total_size = int(response.headers.get("content-length", 0))
-            downloaded = 0
-            start_time = time.time()
+                with open(pdf_file, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                percent = (downloaded / total_size) * 100
+                                logger.debug(
+                                    f"Downloaded: {downloaded}/{total_size} bytes ({percent:.1f}%)"
+                                )
 
-            with open(pdf_file, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            percent = (downloaded / total_size) * 100
-                            logger.debug(
-                                f"Downloaded: {downloaded}/{total_size} bytes ({percent:.1f}%)"
-                            )
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"PDF downloaded successfully: {pdf_file} ({downloaded} bytes in {elapsed:.2f}s)"
+                )
+                extra_files["pdf"] = pdf_file
 
-            elapsed = time.time() - start_time
-            logger.info(
-                f"PDF downloaded successfully: {pdf_file} ({downloaded} bytes in {elapsed:.2f}s)"
-            )
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    # Try fallback URL
+                    pdf_url_fallback = f"https://www.rfc-editor.org/rfc/pdfrfc/rfc{rfc_num}.txt.pdf"
+                    logger.info(f"Primary PDF not found, trying fallback: {pdf_url_fallback}")
 
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                # Try fallback URL
-                pdf_url_fallback = f"https://www.rfc-editor.org/rfc/pdfrfc/rfc{rfc_num}.txt.pdf"
-                logger.info(f"Primary PDF not found, trying fallback: {pdf_url_fallback}")
+                    try:
+                        response = requests.get(pdf_url_fallback, timeout=30, stream=True)
+                        response.raise_for_status()
 
-                try:
-                    response = requests.get(pdf_url_fallback, timeout=30, stream=True)
-                    response.raise_for_status()
+                        total_size = int(response.headers.get("content-length", 0))
+                        downloaded = 0
+                        start_time = time.time()
 
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded = 0
-                    start_time = time.time()
+                        with open(pdf_file, "wb") as f:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded += len(chunk)
 
-                    with open(pdf_file, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                                downloaded += len(chunk)
+                        elapsed = time.time() - start_time
+                        logger.info(
+                            f"PDF downloaded successfully (fallback): {pdf_file} ({downloaded} bytes in {elapsed:.2f}s)"
+                        )
+                        extra_files["pdf"] = pdf_file
 
-                    elapsed = time.time() - start_time
-                    logger.info(
-                        f"PDF downloaded successfully (fallback): {pdf_file} ({downloaded} bytes in {elapsed:.2f}s)"
-                    )
+                    except requests.exceptions.RequestException as e2:
+                        logger.warning(f"PDF download failed (both URLs tried): {e2}")
+                else:
+                    logger.warning(f"HTTP error downloading PDF: {e}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Error downloading PDF: {e}")
+            except OSError as e:
+                logger.warning(f"Error writing PDF file {pdf_file}: {e}")
 
-                except requests.exceptions.RequestException as e2:
-                    logger.warning(f"PDF download failed (both URLs tried): {e2}")
+        elif fmt == "text":
+            text_file = output_dir / f"rfc{rfc_num}.txt"
+            text_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.txt"
+            logger.info(f"Downloading text from: {text_url}")
+
+            try:
+                response = requests.get(text_url, timeout=30, stream=True)
+                response.raise_for_status()
+
+                total_size = int(response.headers.get("content-length", 0))
+                downloaded = 0
+                start_time = time.time()
+
+                with open(text_file, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                percent = (downloaded / total_size) * 100
+                                logger.debug(
+                                    f"Downloaded: {downloaded}/{total_size} bytes ({percent:.1f}%)"
+                                )
+
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"Text downloaded successfully: {text_file} ({downloaded} bytes in {elapsed:.2f}s)"
+                )
+                extra_files["text"] = text_file
+
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Error downloading text: {e}")
+            except OSError as e:
+                logger.warning(f"Error writing text file {text_file}: {e}")
+
+        elif fmt == "xml":
+            # XML is already downloaded as primary file, just add to extra_files if it exists
+            if downloaded_file and downloaded_file.suffix.lower() == ".xml":
+                extra_files["xml"] = downloaded_file
+                logger.info(f"XML already downloaded as primary file: {downloaded_file}")
+
+        elif fmt == "html":
+            # If HTML is already the primary file, add it to extra_files
+            if downloaded_file and downloaded_file.suffix.lower() == ".html":
+                extra_files["html"] = downloaded_file
+                logger.info(f"HTML already downloaded as primary file: {downloaded_file}")
             else:
-                logger.warning(f"HTTP error downloading PDF: {e}")
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Error downloading PDF: {e}")
-        except OSError as e:
-            logger.warning(f"Error writing PDF file {pdf_file}: {e}")
+                # Download HTML explicitly
+                html_file = download_rfc_html(rfc_number, output_dir)
+                if html_file:
+                    extra_files["html"] = html_file
 
-    return downloaded_file
+    return (downloaded_file, extra_files)
 
 
 def download_rfc_recursive(
     rfc_number: str,
     output_dir: Path,
-    fetch_pdf: bool = False,
+    extra_formats: list[str] | None = None,
     max_depth: int = 1,
     processed: set[str] | None = None,
-) -> dict[str, Path]:
+) -> dict[str, tuple[Path, dict[str, Path]]]:
     """
     Recursively download RFC and all referenced RFCs.
 
     Args:
         rfc_number: RFC number to download (will be normalized)
         output_dir: Directory to save downloaded files
-        fetch_pdf: Whether to download PDF files
+        extra_formats: List of additional formats to download (pdf, text, xml, html)
         max_depth: Maximum recursion depth (default: 1)
         processed: Set of already processed RFCs (for internal use)
 
     Returns:
-        Dictionary mapping RFC numbers to their XML file paths
+        Dictionary mapping RFC numbers to tuples of (primary_file, extra_files_dict)
     """
     logger = logging.getLogger(__name__)
 
@@ -276,7 +337,7 @@ def download_rfc_recursive(
     processed.add(rfc_number)
 
     # Initialize result dictionary
-    result: dict[str, Path] = {}
+    result: dict[str, tuple[Path, dict[str, Path]]] = {}
 
     # Determine file paths (could be XML or HTML)
     xml_file = output_dir / f"{rfc_number}.xml"
@@ -285,30 +346,34 @@ def download_rfc_recursive(
     # Check if file already exists (XML or HTML)
     if xml_file.exists():
         logger.info(f"RFC {rfc_number} XML already downloaded, skipping download")
-        downloaded_file = xml_file
+        primary_file = xml_file
+        # For existing files, return empty extra_files dict
+        result[rfc_number] = (primary_file, {})
     elif html_file.exists():
         logger.info(f"RFC {rfc_number} HTML already downloaded, skipping download")
-        downloaded_file = html_file
+        primary_file = html_file
+        # For existing files, return empty extra_files dict
+        result[rfc_number] = (primary_file, {})
     else:
         # Download the RFC
         logger.info(f"Downloading RFC {rfc_number}...")
-        downloaded_file = download_rfc(rfc_number, output_dir, fetch_pdf)
+        primary_file, extra_files = download_rfc(rfc_number, output_dir, extra_formats)
 
-        if downloaded_file is None:
-            logger.error(f"Failed to download RFC {rfc_number}")
+        if primary_file is None:
+            logger.error(f"Failed to download RFC {rfc_number}")  # type: ignore[unreachable]
             return result
 
-    # Add to result (use actual downloaded file, not assumed xml_file)
-    result[rfc_number] = downloaded_file
+        # Add to result with extra files
+        result[rfc_number] = (primary_file, extra_files)
 
     # Extract references if max_depth > 0
     if max_depth > 0:
         try:
             # Choose extraction method based on file type
-            if downloaded_file.suffix.lower() == ".xml":
-                references = extract_rfc_references_from_xml(downloaded_file)
-            elif downloaded_file.suffix.lower() == ".html":
-                references = extract_rfc_references_from_html(downloaded_file)
+            if primary_file.suffix.lower() == ".xml":
+                references = extract_rfc_references_from_xml(primary_file)
+            elif primary_file.suffix.lower() == ".html":
+                references = extract_rfc_references_from_html(primary_file)
             else:
                 references = set()
 
@@ -320,7 +385,7 @@ def download_rfc_recursive(
             for ref_rfc in references:
                 logger.info(f"Found reference to RFC {ref_rfc} (depth {max_depth})")
                 ref_result = download_rfc_recursive(
-                    ref_rfc, output_dir, fetch_pdf, max_depth - 1, processed
+                    ref_rfc, output_dir, extra_formats, max_depth - 1, processed
                 )
                 result.update(ref_result)
 

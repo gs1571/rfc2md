@@ -4,10 +4,10 @@ A Python tool to convert RFC (Request for Comments) documents from XML format to
 
 ## Features
 
-- **Fetch RFCs**: Download RFC documents directly from rfc-editor.org by RFC number
+- **Fetch RFCs**: Download RFC documents directly from rfc-editor.org by RFC number (single or multiple)
 - **Recursive RFC Download**: Automatically download all referenced RFCs
 - **Local Files**: Convert local RFC XML files
-- **PDF Download**: Optionally download PDF versions alongside XML
+- **Additional Formats**: Optionally download additional formats (PDF, text, XML, HTML)
 - **Complete Conversion**: Preserves document structure including:
   - Metadata (title, authors, date, keywords, etc.)
   - Abstract and boilerplate sections
@@ -52,6 +52,14 @@ Or without the "RFC" prefix:
 python3 rfc2md.py --rfc 9514
 ```
 
+### Convert Multiple RFCs
+
+Download and convert multiple RFCs at once:
+
+```bash
+python3 rfc2md.py --rfc 9514 9552 8402
+```
+
 ### Convert from Local File
 
 Convert a local RFC XML file:
@@ -76,19 +84,43 @@ With custom recursion depth:
 python3 rfc2md.py --rfc 9514 --recursive --max-depth 2
 ```
 
-With PDF download:
+With additional formats:
 
 ```bash
 # Recursive download with PDF
-python3 rfc2md.py --rfc 9514 --recursive --pdf --output-dir downloads
+python3 rfc2md.py --rfc 9514 --recursive --extra pdf --output-dir downloads
 ```
 
-### Download PDF
+### Download Additional Formats
 
-Download the PDF version alongside the XML:
+The `--extra` flag allows you to download additional formats of the RFC alongside the primary XML format. You can specify one or more formats:
 
+**Available formats:**
+- `pdf` - PDF version of the RFC
+- `text` - Plain text version of the RFC
+- `xml` - XML version (saved explicitly if requested)
+- `html` - HTML version of the RFC
+
+**Examples:**
+
+Download PDF version:
 ```bash
-python3 rfc2md.py --rfc 9514 --pdf
+python3 rfc2md.py --rfc 9514 --extra pdf
+```
+
+Download multiple formats:
+```bash
+python3 rfc2md.py --rfc 9514 --extra pdf text xml
+```
+
+Download all available formats:
+```bash
+python3 rfc2md.py --rfc 9514 --extra pdf text xml html
+```
+
+Multiple RFCs with additional formats:
+```bash
+python3 rfc2md.py --rfc 9514 9552 --extra pdf text --output-dir downloads
 ```
 
 ### Specify Output Directory
@@ -107,25 +139,44 @@ Specify a custom name for the Markdown output:
 python3 rfc2md.py --file examples/rfc9514.xml --output custom-name.md
 ```
 
-### Enable Debug Logging and Keep Source Files
+### Enable Debug Logging
 
-Get detailed logging information and keep intermediate XML/HTML files:
+Get detailed logging information:
 
 ```bash
 python3 rfc2md.py --rfc 9514 --debug
 ```
 
-**Note:** By default, intermediate XML/HTML files are automatically deleted after successful conversion to save disk space. Use the `--debug` flag to keep these files for inspection or debugging purposes.
+**Note:** By default, intermediate XML/HTML files are automatically deleted after successful conversion to save disk space (unless explicitly requested via `--extra`). The `--debug` flag provides detailed logging but does not automatically save intermediate files.
 
 **Behavior:**
-- **Without `--debug`**: Only the final `.md` file is saved (and `.pdf` if requested)
-- **With `--debug`**: Both source files (`.xml` or `.html`) and the final `.md` file are saved
+- **Without `--debug`**: Only the final `.md` file is saved (and any formats specified with `--extra`)
+- **With `--debug`**: Detailed logging is enabled, but intermediate files are still removed unless specified in `--extra`
+- **To keep XML/HTML files**: Use `--extra xml` or `--extra html` explicitly
+
+**Examples:**
+
+Debug mode without keeping intermediate files:
+```bash
+python3 rfc2md.py --rfc 9514 --debug
+```
+
+Debug mode and keep XML file:
+```bash
+python3 rfc2md.py --rfc 9514 --debug --extra xml
+```
 
 ## Complete Examples
 
 ```bash
 # Download RFC 9514 with PDF to downloads directory
-python3 rfc2md.py --rfc RFC9514 --pdf --output-dir downloads
+python3 rfc2md.py --rfc RFC9514 --extra pdf --output-dir downloads
+
+# Download multiple RFCs with PDF
+python3 rfc2md.py --rfc 9514 9552 8402 --extra pdf --output-dir downloads
+
+# Download RFC with multiple formats
+python3 rfc2md.py --rfc 9514 --extra pdf text xml --output-dir downloads
 
 # Download RFC 9514 and all its references recursively
 python3 rfc2md.py --rfc 9514 --recursive --output-dir output
@@ -133,20 +184,26 @@ python3 rfc2md.py --rfc 9514 --recursive --output-dir output
 # Recursive download with depth 2 and debug logging
 python3 rfc2md.py --rfc 9514 --recursive --max-depth 2 --debug
 
+# Recursive download with additional formats
+python3 rfc2md.py --rfc 9514 --recursive --extra pdf xml --output-dir output
+
 # Convert local file with custom output name
 python3 rfc2md.py --file examples/rfc9514.xml --output output/my-rfc.md
 
-# Download and convert with debug logging (keeps source files)
+# Download and convert with debug logging
 python3 rfc2md.py --rfc 9514 --output-dir output --debug
 
-# Keep intermediate files for debugging
-python3 rfc2md.py --rfc 9514 --debug --output-dir output
+# Keep XML file for debugging
+python3 rfc2md.py --rfc 9514 --debug --extra xml --output-dir output
 
 # Recursive download without keeping source files (saves disk space)
 python3 rfc2md.py --rfc 9514 --recursive --output-dir output
 
-# Recursive download with debug (keeps all XML/HTML files)
-python3 rfc2md.py --rfc 9514 --recursive --debug --output-dir output
+# Recursive download with debug and keep XML files
+python3 rfc2md.py --rfc 9514 --recursive --debug --extra xml --output-dir output
+
+# Multiple RFCs with recursive download
+python3 rfc2md.py --rfc 9514 9552 --recursive --max-depth 1 --output-dir output
 ```
 
 ## Supported RFC XML Version

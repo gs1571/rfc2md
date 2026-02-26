@@ -39,15 +39,15 @@ type-check:
 
 test:
 	@echo "Running all tests..."
-	pytest --cov=lib --cov-report=term-missing --cov-report=html
+	source .venv/bin/activate && pytest --cov=lib --cov-report=term-missing --cov-report=html
 
 test-unit:
 	@echo "Running unit tests..."
-	pytest -m "not integration" --cov=lib --cov-report=term-missing
+	source .venv/bin/activate && pytest -m "not integration" --cov=lib --cov-report=term-missing
 
 test-integration:
 	@echo "Running integration tests..."
-	pytest -m integration -v
+	source .venv/bin/activate && pytest -m integration -v
 
 update-snapshots:
 	@echo "Updating all snapshots..."
