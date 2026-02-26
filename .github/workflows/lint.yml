@@ -40,10 +40,9 @@ jobs:
       run: |
         mypy rfc2md.py lib/
 
-    - name: Run tests (if any)
+    - name: Run tests
       run: |
-        pytest --cov=lib --cov-report=term-missing --cov-report=xml || echo "No tests found"
-      continue-on-error: true
+        pytest --cov=lib --cov-report=term-missing --cov-report=xml
 
     - name: Upload coverage to Codecov
       if: matrix.python-version == '3.11'
