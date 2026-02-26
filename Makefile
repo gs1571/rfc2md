@@ -2,14 +2,17 @@
 
 help:
 	@echo "Available commands:"
-	@echo "  make install      - Install production dependencies"
-	@echo "  make install-dev  - Install development dependencies"
-	@echo "  make lint         - Run ruff linter"
-	@echo "  make format       - Format code with ruff"
-	@echo "  make type-check   - Run mypy type checker"
-	@echo "  make test         - Run tests with pytest"
-	@echo "  make all          - Run all checks (lint, format-check, type-check, test)"
-	@echo "  make clean        - Remove cache and build artifacts"
+	@echo "  make install           - Install production dependencies"
+	@echo "  make install-dev       - Install development dependencies"
+	@echo "  make lint              - Run ruff linter"
+	@echo "  make format            - Format code with ruff"
+	@echo "  make type-check        - Run mypy type checker"
+	@echo "  make test              - Run all tests with pytest"
+	@echo "  make test-unit         - Run only unit tests"
+	@echo "  make test-integration  - Run only integration tests"
+	@echo "  make update-snapshots  - Update all test snapshots"
+	@echo "  make all               - Run all checks (lint, format-check, type-check, test)"
+	@echo "  make clean             - Remove cache and build artifacts"
 
 install:
 	pip install -r requirements.txt
@@ -35,8 +38,36 @@ type-check:
 	mypy rfc2md.py lib/
 
 test:
-	@echo "Running tests..."
-	pytest --cov=lib --cov-report=term-missing --cov-report=html || echo "No tests found yet"
+	@echo "Running all tests..."
+	pytest --cov=lib --cov-report=term-missing --cov-report=html
+
+test-unit:
+	@echo "Running unit tests..."
+	pytest -m "not integration" --cov=lib --cov-report=term-missing
+
+test-integration:
+	@echo "Running integration tests..."
+	pytest -m integration -v
+
+update-snapshots:
+	@echo "Updating all snapshots..."
+	@echo "Updating XML snapshots..."
+	@for file in tests/fixtures/xml/*.xml; do \
+		if [ -f "$$file" ]; then \
+			base=$$(basename "$$file" .xml); \
+			echo "  Updating $$base..."; \
+			source .venv/bin/activate && python rfc2md.py --file "$$file" --output "tests/snapshots/$$base.md"; \
+		fi \
+	done
+	@echo "Updating HTML snapshots..."
+	@for file in tests/fixtures/html/*.html; do \
+		if [ -f "$$file" ]; then \
+			base=$$(basename "$$file" .html); \
+			echo "  Updating $$base..."; \
+			source .venv/bin/activate && python rfc2md.py --file "$$file" --output "tests/snapshots/$$base.md"; \
+		fi \
+	done
+	@echo "All snapshots updated!"
 
 all: lint format-check type-check test
 	@echo "All checks passed!"
