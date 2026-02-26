@@ -322,6 +322,55 @@ Contributions are welcome! Areas for improvement:
 - Additional output formats (HTML, PDF, etc.)
 - Performance optimizations for large documents
 
+## Testing
+
+This project includes comprehensive unit and integration tests with snapshot testing.
+
+For detailed information about tests, see [tests/README.md](tests/README.md).
+
+### Quick Start
+
+Run all tests:
+```bash
+source .venv/bin/activate && pytest
+```
+
+Run only unit tests:
+```bash
+source .venv/bin/activate && pytest -m "not integration"
+```
+
+Run only integration tests:
+```bash
+source .venv/bin/activate && pytest -m integration
+```
+
+Generate coverage report:
+```bash
+source .venv/bin/activate && pytest --cov=lib --cov-report=html
+```
+
+### Test Structure
+
+- **Unit tests**: Test individual functions and classes in isolation
+  - `tests/test_utils.py` - Utility functions tests
+  - `tests/test_html_converter.py` - HTML converter tests
+  
+- **Integration tests**: Test complete RFC conversion with snapshot comparison
+  - `tests/test_integration.py` - Snapshot-based integration tests
+  - `tests/fixtures/xml/` - XML test files
+  - `tests/fixtures/html/` - HTML test files
+  - `tests/snapshots/` - Expected MD outputs
+
+### Snapshot Testing
+
+Integration tests use snapshot testing:
+1. Convert RFC (XML/HTML) to Markdown
+2. Compare with expected output (snapshot)
+3. On mismatch: show diff and regeneration command
+
+See [tests/README.md](tests/README.md) for more details.
+
 ## License
 
 See LICENSE file for details.

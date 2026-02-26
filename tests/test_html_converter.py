@@ -513,7 +513,6 @@ Table of Contents
         assert "[`1`](#section-1)`. Introduction`" in formatted_toc
 
 
-
 class TestPageBreakRemovalExtended:
     """Extended tests for page break removal with various RFC formats."""
 
