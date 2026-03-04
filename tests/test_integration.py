@@ -218,3 +218,136 @@ class TestLocalMdLinks:
             assert ".md)" in line
 
         print(f"[PASS] Found {len(reference_lines)} local MD links with correct format")
+
+
+@pytest.mark.integration
+class TestFromMarkdownFile:
+    """Integration tests for extracting and processing RFCs from markdown files."""
+
+    def test_from_markdown_file(self, tmp_path):
+        """
+        Test end-to-end flow: markdown file → extract RFCs → process.
+
+        This test verifies that:
+        1. RFC numbers are correctly extracted from a markdown file
+        2. The extracted RFCs can be used as input for processing
+        3. Multiple RFCs are handled correctly
+        """
+        # Arrange
+        from lib.utils import extract_rfc_numbers_from_markdown
+
+        md_file = Path("tests/fixtures/test_rfcs.md")
+        assert md_file.exists(), f"Test fixture not found: {md_file}"
+
+        # Act - extract RFC numbers
+        print(f"\n[TEST] Extracting RFC numbers from {md_file}...")
+        rfc_numbers = extract_rfc_numbers_from_markdown(md_file)
+
+        # Assert - verify extraction
+        assert isinstance(rfc_numbers, set)
+        assert len(rfc_numbers) > 0, "Should extract at least one RFC"
+
+        # Expected RFCs from test_rfcs.md
+        expected_rfcs = {
+            "rfc9514",
+            "rfc9552",
+            "rfc8402",
+            "rfc7752",
+            "rfc2119",
+            "rfc6119",
+            "rfc3209",
+            "rfc4655",
+            "rfc5226",
+            "rfc5693",
+            "rfc7938",
+        }
+
+        assert rfc_numbers == expected_rfcs, f"Expected {expected_rfcs}, got {rfc_numbers}"
+        print(f"[PASS] Extracted {len(rfc_numbers)} RFCs: {sorted(rfc_numbers)}")
+
+    def test_from_markdown_file_deduplication(self, tmp_path):
+        """
+        Test that duplicate RFC mentions are deduplicated.
+        """
+        # Arrange
+        from lib.utils import extract_rfc_numbers_from_markdown
+
+        md_content = """
+# Test
+RFC 9514 is mentioned here.
+RFC 9514 is mentioned again.
+See also RFC-9514 and rfc9514.md.
+Also RFC9514 and [RFC 9514](link).
+"""
+        md_file = tmp_path / "test_dedup.md"
+        md_file.write_text(md_content, encoding="utf-8")
+
+        # Act
+        rfc_numbers = extract_rfc_numbers_from_markdown(md_file)
+
+        # Assert
+        assert isinstance(rfc_numbers, set)
+        assert len(rfc_numbers) == 1, "Should deduplicate to single RFC"
+        assert "rfc9514" in rfc_numbers
+        print("[PASS] Duplicate RFCs correctly deduplicated")
+
+    def test_from_markdown_file_empty(self, tmp_path):
+        """
+        Test handling of markdown file with no RFC references.
+        """
+        # Arrange
+        from lib.utils import extract_rfc_numbers_from_markdown
+
+        md_content = """
+# Test Document
+This is a test document with no RFC references.
+Just some regular text here.
+"""
+        md_file = tmp_path / "test_empty.md"
+        md_file.write_text(md_content, encoding="utf-8")
+
+        # Act
+        rfc_numbers = extract_rfc_numbers_from_markdown(md_file)
+
+        # Assert
+        assert isinstance(rfc_numbers, set)
+        assert len(rfc_numbers) == 0, "Should return empty set for no RFCs"
+        print("[PASS] Empty markdown file handled correctly")
+
+    def test_from_markdown_file_various_formats(self, tmp_path):
+        """
+        Test extraction of RFCs in various formats.
+        """
+        # Arrange
+        from lib.utils import extract_rfc_numbers_from_markdown
+
+        md_content = """
+# Various Formats
+- RFC 9514 (with space)
+- RFC9552 (without space)
+- RFC-8402 (with hyphen)
+- [RFC 7752](link) (in link)
+- rfc2119.md (as filename)
+- rfc6119.xml (as xml filename)
+- rfc3209.html (as html filename)
+- See rfc4655. (with trailing dot)
+"""
+        md_file = tmp_path / "test_formats.md"
+        md_file.write_text(md_content, encoding="utf-8")
+
+        # Act
+        rfc_numbers = extract_rfc_numbers_from_markdown(md_file)
+
+        # Assert
+        expected = {
+            "rfc9514",
+            "rfc9552",
+            "rfc8402",
+            "rfc7752",
+            "rfc2119",
+            "rfc6119",
+            "rfc3209",
+            "rfc4655",
+        }
+        assert rfc_numbers == expected
+        print(f"[PASS] All format variations extracted correctly: {sorted(rfc_numbers)}")

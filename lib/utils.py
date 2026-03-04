@@ -133,6 +133,54 @@ def extract_rfc_references_from_html(html_file: Path) -> set[str]:
     return rfc_refs
 
 
+def extract_rfc_numbers_from_markdown(md_file: Path) -> set[str]:
+    """
+    Extract RFC numbers from a Markdown file.
+
+    This function parses Markdown content and looks for RFC references in various formats:
+    - RFC 9514 or RFC9514 (with/without space, case-insensitive)
+    - [RFC 9514](...) (in markdown links)
+    - rfc9514.md or rfc9514.xml (as filenames)
+    - RFC-9514 (with hyphen)
+    - rfc9514. (with trailing dot)
+
+    Args:
+        md_file: Path to the Markdown file
+
+    Returns:
+        Set of normalized RFC numbers (format "rfcXXXX") found in the file
+    """
+    rfc_refs: set[str] = set()
+
+    try:
+        # Read markdown file
+        with open(md_file, encoding="utf-8") as f:
+            md_content = f.read()
+
+        # Comprehensive regex pattern to match various RFC formats
+        # Pattern explanation:
+        # \b - word boundary to avoid false matches
+        # [Rr][Ff][Cc] - case-insensitive "RFC"
+        # [\s-]? - optional space or hyphen
+        # (\d+) - capture group for RFC number (one or more digits)
+        # (?:\.(?:md|xml|html))? - optional file extension (.md, .xml, .html)
+        # (?:\.)? - optional trailing dot
+        # \b - word boundary
+        rfc_pattern = re.compile(r"\b[Rr][Ff][Cc][\s-]?(\d+)(?:\.(?:md|xml|html))?(?:\.)?\b")
+
+        # Find all RFC references
+        for match in rfc_pattern.finditer(md_content):
+            rfc_number = f"rfc{match.group(1)}"
+            rfc_refs.add(rfc_number)
+
+    except FileNotFoundError:
+        logging.warning(f"File not found: {md_file}")
+    except Exception as e:
+        logging.warning(f"Error extracting RFC numbers from markdown {md_file}: {e}")
+
+    return rfc_refs
+
+
 def build_index_file(output_dir: Path) -> None:
     """
     Build index.md file with sorted list of all RFCs in directory.

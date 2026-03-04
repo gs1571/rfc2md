@@ -25,6 +25,7 @@ from lib import (
     build_index_file,
     download_rfc,
     download_rfc_recursive,
+    extract_rfc_numbers_from_markdown,
     normalize_rfc_number,
     setup_logging,
 )
@@ -48,6 +49,8 @@ Examples:
   %(prog)s --file examples/rfc9514.xml --output output/custom.md
   %(prog)s --rfc RFC9514 --output-dir output --output rfc9514-custom.md
   %(prog)s --rfc 9514 --recursive --extra xml html --max-depth 2
+  %(prog)s --from-md references.md --output-dir downloads
+  %(prog)s --from-md README.md --recursive --extra pdf --max-depth 2
         """,
     )
 
@@ -60,6 +63,13 @@ Examples:
         help='RFC number(s) to fetch (e.g., "RFC9514" or "9514"). Multiple RFCs can be specified.',
     )
     input_group.add_argument("--file", type=str, help="Path to local RFC XML file")
+    input_group.add_argument(
+        "--from-md",
+        type=str,
+        help="Path to Markdown file containing RFC references. "
+        "All RFC numbers will be extracted and processed. "
+        "Supports formats: RFC 9514, RFC9514, rfc9514.md, etc.",
+    )
 
     # Output options
     parser.add_argument(
@@ -106,13 +116,16 @@ Examples:
 
     # Validate arguments
     if args.extra and args.file:
-        parser.error("--extra can only be used with --rfc, not with --file")
+        parser.error("--extra can only be used with --rfc or --from-md, not with --file")
 
     if args.recursive and args.file:
-        parser.error("--recursive can only be used with --rfc, not with --file")
+        parser.error("--recursive can only be used with --rfc or --from-md, not with --file")
 
     if args.build_index and args.output:
         parser.error("--build-index cannot be used with custom --output filename")
+
+    if args.output and hasattr(args, "from_md") and args.from_md:
+        parser.error("--output cannot be used with --from-md (multiple RFCs will be processed)")
 
     return args
 
@@ -138,6 +151,31 @@ def main():
         rfc_numbers = [normalize_rfc_number(rfc) for rfc in args.rfc]
         logger.info(f"Processing RFC(s): {', '.join(rfc_numbers)}")
 
+    elif hasattr(args, "from_md") and args.from_md:
+        # Extract RFC numbers from markdown file
+        md_file = Path(args.from_md)
+        if not md_file.exists():
+            logger.error(f"Markdown file not found: {md_file}")
+            sys.exit(1)
+
+        logger.info(f"Extracting RFC numbers from: {md_file.absolute()}")
+        rfc_set = extract_rfc_numbers_from_markdown(md_file)
+
+        if not rfc_set:
+            logger.warning(f"No RFC numbers found in {md_file}")
+            sys.exit(0)
+
+        # Convert set to sorted list
+        rfc_numbers = sorted(rfc_set)
+        logger.info(f"Found {len(rfc_numbers)} RFC(s): {', '.join(rfc_numbers)}")
+
+    else:
+        # This should not happen due to argparse validation, but handle it anyway
+        logger.error("No input source specified")
+        sys.exit(1)
+
+    # Common processing for both --rfc and --from-md
+    if args.rfc or (hasattr(args, "from_md") and args.from_md):
         # Prepare extra_formats list
         extra_formats = args.extra if args.extra else []
 
@@ -272,7 +310,7 @@ def main():
                 logger.info("Building index file...")
                 build_index_file(output_dir)
 
-    else:
+    elif args.file:
         # Process local file
         xml_file = Path(args.file)
         if not xml_file.exists():

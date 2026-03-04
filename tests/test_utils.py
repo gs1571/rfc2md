@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 from lib.utils import (
+    extract_rfc_numbers_from_markdown,
     extract_rfc_references_from_html,
     extract_rfc_references_from_xml,
     normalize_rfc_number,
@@ -281,5 +282,248 @@ class TestExtractRfcReferencesFromHtml:
             # Count how many times rfc1234 appears (should be 1 since it's a set)
             rfc1234_count = sum(1 for ref in refs if ref == "rfc1234")
             assert rfc1234_count == 1
+        finally:
+            temp_file.unlink()
+
+
+class TestExtractRfcNumbersFromMarkdown:
+    """Tests for extract_rfc_numbers_from_markdown function."""
+
+    def test_extract_with_space(self):
+        """Test extraction with space format 'RFC 9514'."""
+        md_content = "# Test\nSee RFC 9514 for details."
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_without_space(self):
+        """Test extraction without space format 'RFC9514'."""
+        md_content = "# Test\nSee RFC9514 for details."
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_in_links(self):
+        """Test extraction from markdown links '[RFC 9514](...)'."""
+        md_content = """
+# Test
+See [RFC 9514](https://www.rfc-editor.org/rfc/rfc9514) and
+[RFC 8402](rfc8402.md) for more information.
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+            assert "rfc8402" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_as_filename(self):
+        """Test extraction from filenames 'rfc9514.md' or 'rfc9514.xml'."""
+        md_content = """
+# Test
+- [RFC 9514](rfc9514.md)
+- [RFC 9552](rfc9552.xml)
+- [RFC 8402](rfc8402.html)
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+            assert "rfc9552" in refs
+            assert "rfc8402" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_with_hyphen(self):
+        """Test extraction with hyphen format 'RFC-9514'."""
+        md_content = "# Test\nSee RFC-9514 for details."
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_with_trailing_dot(self):
+        """Test extraction with trailing dot 'rfc9514.'."""
+        md_content = "# Test\nSee rfc9514. for details."
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+        finally:
+            temp_file.unlink()
+
+    def test_extract_mixed_formats(self):
+        """Test extraction with multiple formats in one file."""
+        md_content = """
+# Test Document
+
+This document references RFC 9514, RFC9552, and RFC-8402.
+See also [rfc7752.md](rfc7752.md) and rfc2119.
+
+More info at [RFC 6119](https://example.com/rfc6119.html).
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert "rfc9514" in refs
+            assert "rfc9552" in refs
+            assert "rfc8402" in refs
+            assert "rfc7752" in refs
+            assert "rfc2119" in refs
+            assert "rfc6119" in refs
+            assert len(refs) == 6
+        finally:
+            temp_file.unlink()
+
+    def test_extract_case_insensitive(self):
+        """Test extraction is case-insensitive."""
+        md_content = """
+# Test
+RFC 9514, rfc 9552, Rfc 8402, RFC9514, rfc9552, RfC8402
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            # Should have 3 unique RFCs despite different cases
+            assert "rfc9514" in refs
+            assert "rfc9552" in refs
+            assert "rfc8402" in refs
+            assert len(refs) == 3
+        finally:
+            temp_file.unlink()
+
+    def test_extract_deduplicates(self):
+        """Test that duplicate RFC mentions are deduplicated."""
+        md_content = """
+# Test
+RFC 9514 is mentioned here.
+RFC 9514 is mentioned again.
+See also RFC-9514 and rfc9514.md.
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            # Should have only one rfc9514 despite multiple mentions
+            assert "rfc9514" in refs
+            assert len(refs) == 1
+        finally:
+            temp_file.unlink()
+
+    def test_extract_from_nonexistent_file(self):
+        """Test extraction from non-existent file."""
+        md_file = Path("nonexistent_file.md")
+        refs = extract_rfc_numbers_from_markdown(md_file)
+
+        # Should return empty set
+        assert isinstance(refs, set)
+        assert len(refs) == 0
+
+    def test_extract_returns_normalized(self):
+        """Test that all results are in normalized format 'rfcXXXX'."""
+        md_content = """
+# Test
+RFC 9514, RFC-9552, rfc8402.md, RFC 7752
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            # All should be in format "rfcXXXX" (lowercase)
+            for ref in refs:
+                assert ref.startswith("rfc")
+                assert ref.islower()
+                assert ref[3:].isdigit()
+        finally:
+            temp_file.unlink()
+
+    def test_extract_from_empty_markdown(self):
+        """Test extraction from markdown without RFC references."""
+        md_content = """
+# Test Document
+
+This is a test document with no RFC references.
+Just some regular text here.
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
+            assert len(refs) == 0
+        finally:
+            temp_file.unlink()
+
+    def test_extract_returns_set(self):
+        """Test that function returns a set."""
+        md_content = "RFC 9514"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(md_content)
+            temp_file = Path(f.name)
+
+        try:
+            refs = extract_rfc_numbers_from_markdown(temp_file)
+            assert isinstance(refs, set)
         finally:
             temp_file.unlink()

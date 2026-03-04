@@ -7,7 +7,12 @@ This package contains modules for converting RFC XML and HTML documents to Markd
 from .converter import XmlToMdConverter
 from .downloader import download_rfc, download_rfc_html, download_rfc_recursive
 from .html_converter import HtmlToMdConverter
-from .utils import build_index_file, normalize_rfc_number, setup_logging
+from .utils import (
+    build_index_file,
+    extract_rfc_numbers_from_markdown,
+    normalize_rfc_number,
+    setup_logging,
+)
 
 __all__ = [
     "XmlToMdConverter",
@@ -18,4 +23,5 @@ __all__ = [
     "normalize_rfc_number",
     "setup_logging",
     "build_index_file",
+    "extract_rfc_numbers_from_markdown",
 ]

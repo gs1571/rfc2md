@@ -63,6 +63,41 @@ Download and convert multiple RFCs at once:
 python3 rfc2md.py --rfc 9514 9552 8402
 ```
 
+### Extract RFCs from Markdown File
+
+Extract and process all RFC numbers from a Markdown file. This is useful when you have a document that references multiple RFCs and want to download and convert all of them at once.
+
+**Supported RFC formats in Markdown:**
+- `RFC 9514` or `RFC9514` (with/without space, case-insensitive)
+- `[RFC 9514](...)` (in markdown links)
+- `rfc9514.md`, `rfc9514.xml`, `rfc9514.html` (as filenames)
+- `RFC-9514` (with hyphen)
+- `rfc9514.` (with trailing dot)
+
+**Examples:**
+
+Extract RFCs from a markdown file:
+```bash
+python3 rfc2md.py --from-md references.md --output-dir downloads
+```
+
+Extract and download with additional formats:
+```bash
+python3 rfc2md.py --from-md README.md --extra pdf --output-dir downloads
+```
+
+Extract with recursive download:
+```bash
+python3 rfc2md.py --from-md references.md --recursive --max-depth 2 --output-dir downloads
+```
+
+Extract and generate index:
+```bash
+python3 rfc2md.py --from-md references.md --output-dir downloads --build-index
+```
+
+**Note:** The tool automatically deduplicates RFC numbers, so if an RFC is mentioned multiple times in the markdown file, it will only be downloaded and converted once.
+
 ### Convert from Local File
 
 Convert a local RFC XML file:
@@ -210,6 +245,18 @@ python3 rfc2md.py --rfc 9514 9552 8402 --extra pdf --output-dir downloads
 
 # Download RFC with multiple formats
 python3 rfc2md.py --rfc 9514 --extra pdf text xml --output-dir downloads
+
+# Extract RFCs from markdown file
+python3 rfc2md.py --from-md references.md --output-dir downloads
+
+# Extract RFCs from markdown with additional formats
+python3 rfc2md.py --from-md README.md --extra pdf --output-dir downloads
+
+# Extract RFCs with recursive download
+python3 rfc2md.py --from-md references.md --recursive --max-depth 2 --output-dir downloads
+
+# Extract RFCs and generate index
+python3 rfc2md.py --from-md references.md --output-dir downloads --build-index
 
 # Download RFC 9514 and all its references recursively
 python3 rfc2md.py --rfc 9514 --recursive --output-dir output
