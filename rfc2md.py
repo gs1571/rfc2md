@@ -22,6 +22,7 @@ from pathlib import Path
 from lib import (
     HtmlToMdConverter,
     XmlToMdConverter,
+    build_index_file,
     download_rfc,
     download_rfc_recursive,
     normalize_rfc_number,
@@ -94,6 +95,13 @@ Examples:
     # Logging options
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
+    # Index generation option
+    parser.add_argument(
+        "--build-index",
+        action="store_true",
+        help="Generate index.md file with sorted list of all converted RFCs",
+    )
+
     args = parser.parse_args()
 
     # Validate arguments
@@ -102,6 +110,9 @@ Examples:
 
     if args.recursive and args.file:
         parser.error("--recursive can only be used with --rfc, not with --file")
+
+    if args.build_index and args.output:
+        parser.error("--build-index cannot be used with custom --output filename")
 
     return args
 
@@ -156,13 +167,15 @@ def main():
             # Convert all downloaded RFCs
             success_count = 0
             total_count = len(all_rfc_files)
+            current = 0
 
             for rfc_num in sorted(all_rfc_files.keys()):
+                current += 1
                 primary_file, extra_files = all_rfc_files[rfc_num]
                 output_file = output_dir / f"{rfc_num}.md"
 
                 try:
-                    logger.info(f"Converting {rfc_num} to Markdown...")
+                    logger.info(f"Converting {rfc_num} ({current}/{total_count}) to Markdown...")
 
                     # Detect file type by extension and convert
                     if primary_file.suffix.lower() == ".html":
@@ -195,16 +208,22 @@ def main():
                 f"Conversion complete: {success_count}/{total_count} RFCs converted successfully"
             )
 
+            # Generate index if requested
+            if args.build_index:
+                logger.info("Building index file...")
+                build_index_file(output_dir)
+
             if success_count == 0:
                 sys.exit(1)
 
         else:
             # Non-recursive download - process each RFC individually
-            for rfc_number in rfc_numbers:
-                logger.info(f"Processing RFC {rfc_number}")
+            total_rfcs = len(rfc_numbers)
+            for idx, rfc_number in enumerate(rfc_numbers, 1):
+                logger.info(f"Processing RFC {rfc_number} ({idx}/{total_rfcs})")
 
-                result = download_rfc(rfc_number, output_dir, extra_formats)
-                if result[0] is None:
+                result = download_rfc(rfc_number, output_dir, extra_formats, idx, total_rfcs)
+                if result is None:
                     logger.error(f"Failed to download RFC {rfc_number}")
                     continue
 
@@ -248,6 +267,11 @@ def main():
                 except Exception as e:
                     logger.error(f"Error during conversion: {e}", exc_info=True)
 
+            # Generate index if requested
+            if args.build_index:
+                logger.info("Building index file...")
+                build_index_file(output_dir)
+
     else:
         # Process local file
         xml_file = Path(args.file)
@@ -281,6 +305,11 @@ def main():
                 f.write(markdown_content)
 
             logger.info(f"Successfully converted to Markdown: {output_file}")
+
+            # Generate index if requested
+            if args.build_index:
+                logger.info("Building index file...")
+                build_index_file(output_dir)
 
         except Exception as e:
             logger.error(f"Error during conversion: {e}", exc_info=True)

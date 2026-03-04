@@ -131,3 +131,96 @@ def extract_rfc_references_from_html(html_file: Path) -> set[str]:
         logging.warning(f"Error extracting RFC references from HTML {html_file}: {e}")
 
     return rfc_refs
+
+
+def build_index_file(output_dir: Path) -> None:
+    """
+    Build index.md file with sorted list of all RFCs in directory.
+
+    Args:
+        output_dir: Directory containing RFC markdown files
+    """
+    logger = logging.getLogger(__name__)
+
+    # Find all RFC markdown files (excluding index.md)
+    rfc_files = []
+    for md_file in output_dir.glob("rfc*.md"):
+        if md_file.name != "index.md":
+            # Extract RFC number from filename
+            match = re.match(r"rfc(\d+)\.md", md_file.name)
+            if match:
+                rfc_number = int(match.group(1))
+                rfc_files.append((rfc_number, md_file))
+
+    if not rfc_files:
+        logger.warning(f"No RFC markdown files found in {output_dir}")
+        return
+
+    # Sort by RFC number
+    rfc_files.sort(key=lambda x: x[0])
+
+    # Build index content
+    index_lines = [
+        "# RFC Index",
+        "",
+        "This index contains all RFC documents converted to Markdown format.",
+        "",
+    ]
+
+    for rfc_number, md_file in rfc_files:
+        rfc_name = f"rfc{rfc_number}"
+        title = ""
+
+        # Try to extract title from XML file first
+        xml_file = output_dir / f"{rfc_name}.xml"
+        if xml_file.exists():
+            try:
+                tree = etree.parse(str(xml_file))
+                root = tree.getroot()
+                front = root.find("front")
+                if front is not None:
+                    title_elem = front.find("title")
+                    if title_elem is not None and title_elem.text:
+                        title = title_elem.text.strip()
+            except Exception as e:
+                logger.debug(f"Could not extract title from {xml_file}: {e}")
+
+        # If no XML or no title, try HTML file
+        if not title:
+            html_file = output_dir / f"{rfc_name}.html"
+            if html_file.exists():
+                try:
+                    with open(html_file, encoding="utf-8") as f:
+                        html_content = f.read()
+                    soup = BeautifulSoup(html_content, "html.parser")
+
+                    # Try to get title from <title> tag
+                    title_tag = soup.find("title")
+                    if title_tag and title_tag.string:
+                        title = title_tag.string.strip()
+                        # Remove "RFC XXXX - " prefix if present
+                        title = re.sub(r"^RFC\s*\d+\s*[-:]\s*", "", title, flags=re.IGNORECASE)
+
+                    # If no title tag, try first <h1>
+                    if not title:
+                        h1_tag = soup.find("h1")
+                        if h1_tag:
+                            title = h1_tag.get_text().strip()
+                            title = re.sub(r"^RFC\s*\d+\s*[-:]\s*", "", title, flags=re.IGNORECASE)
+                except Exception as e:
+                    logger.debug(f"Could not extract title from {html_file}: {e}")
+
+        # Format the index entry
+        if title:
+            index_lines.append(f"- [RFC {rfc_number}]({md_file.name}): {title}")
+        else:
+            index_lines.append(f"- [RFC {rfc_number}]({md_file.name}):")
+
+    # Write index file
+    index_file = output_dir / "index.md"
+    index_content = "\n".join(index_lines) + "\n"
+
+    with open(index_file, "w", encoding="utf-8") as f:
+        f.write(index_content)
+
+    logger.info(f"Generated index file: {index_file} with {len(rfc_files)} RFCs")

@@ -161,3 +161,60 @@ class TestHtmlConversion:
             pytest.fail(f"Snapshot mismatch for {rfc_name}")
         else:
             print(f"[PASS] {rfc_name} - snapshot matches")
+
+
+@pytest.mark.integration
+class TestLocalMdLinks:
+    """Integration tests for local MD links in references."""
+
+    def test_local_md_links_in_references(self, tmp_path):
+        """
+        Test that local MD links are added to RFC references.
+        """
+        # Arrange
+        xml_file = Path("tests/fixtures/xml/rfc9514.xml")
+        output_file = tmp_path / "rfc9514.md"
+
+        # Act - convert using XmlToMdConverter
+        converter = XmlToMdConverter(xml_file)
+        markdown_content = converter.convert()
+        output_file.write_text(markdown_content, encoding="utf-8")
+
+        # Assert - check for local MD links in references
+        assert "[Local MD](rfc2119.md)" in markdown_content
+        assert "[Local MD](rfc7752.md)" in markdown_content
+        assert "[Local MD](rfc8402.md)" in markdown_content
+
+        # Verify format: external URL followed by local MD link
+        assert (
+            "<https://www.rfc-editor.org/info/rfc2119> [Local MD](rfc2119.md)" in markdown_content
+        )
+
+        print("[PASS] Local MD links are correctly added to references")
+
+    def test_local_md_links_format(self, tmp_path):
+        """
+        Test the correct format of local MD links.
+        """
+        # Arrange
+        xml_file = Path("tests/fixtures/xml/rfc9552.xml")
+        output_file = tmp_path / "rfc9552.md"
+
+        # Act
+        converter = XmlToMdConverter(xml_file)
+        markdown_content = converter.convert()
+        output_file.write_text(markdown_content, encoding="utf-8")
+
+        # Assert - verify links are in correct format
+        lines = markdown_content.split("\n")
+        reference_lines = [line for line in lines if "[Local MD](rfc" in line]
+
+        # Should have at least some local MD links
+        assert len(reference_lines) > 0
+
+        # Each reference line should have the pattern: <URL> [Local MD](rfcXXXX.md)
+        for line in reference_lines:
+            assert "[Local MD](rfc" in line
+            assert ".md)" in line
+
+        print(f"[PASS] Found {len(reference_lines)} local MD links with correct format")

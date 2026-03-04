@@ -6,6 +6,7 @@ to well-formatted Markdown.
 """
 
 import logging
+import re
 from pathlib import Path
 
 from lxml import etree
@@ -685,6 +686,13 @@ class XmlToMdConverter:
         # Add target URL if available
         if target:
             ref_parts.append(f"<{target}>")
+
+        # Add local MD link if this is an RFC reference
+        if anchor:
+            rfc_match = re.match(r"^RFC[\s-]?(\d+)$", anchor, re.IGNORECASE)
+            if rfc_match:
+                rfc_num = rfc_match.group(1)
+                ref_parts.append(f"[Local MD](rfc{rfc_num}.md)")
 
         # Combine all parts
         ref_text = " ".join(ref_parts)

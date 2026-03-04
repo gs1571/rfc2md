@@ -17,13 +17,17 @@ from lib.utils import (
 )
 
 
-def download_rfc_html(rfc_number, output_dir):
+def download_rfc_html(
+    rfc_number: str, output_dir: Path, current: int | None = None, total: int | None = None
+) -> Path | None:
     """
     Download RFC HTML from rfc-editor.org.
 
     Args:
         rfc_number: Normalized RFC number (e.g., "rfc9514")
         output_dir: Path object for output directory
+        current: Current RFC number in sequence (for progress tracking)
+        total: Total number of RFCs to download (for progress tracking)
 
     Returns:
         Path to downloaded HTML file, or None if download failed
@@ -37,7 +41,9 @@ def download_rfc_html(rfc_number, output_dir):
     html_url = f"https://www.rfc-editor.org/rfc/rfc{rfc_num}.html"
     html_file = output_dir / f"rfc{rfc_num}.html"
 
-    logger.info(f"Downloading HTML from: {html_url}")
+    # Format progress message if current and total are provided
+    progress_msg = f" ({current}/{total})" if current is not None and total is not None else ""
+    logger.info(f"Downloading RFC {rfc_num}{progress_msg} HTML from: {html_url}")
 
     try:
         response = requests.get(html_url, timeout=30, stream=True)
@@ -89,7 +95,13 @@ def download_rfc_html(rfc_number, output_dir):
         return None
 
 
-def download_rfc(rfc_number, output_dir, extra_formats=None):
+def download_rfc(
+    rfc_number: str,
+    output_dir: Path,
+    extra_formats: list[str] | None = None,
+    current: int | None = None,
+    total: int | None = None,
+) -> tuple[Path, dict[str, Path]] | None:
     """
     Download RFC XML and optionally additional formats from rfc-editor.org.
     Falls back to HTML if XML is not available.
@@ -98,6 +110,8 @@ def download_rfc(rfc_number, output_dir, extra_formats=None):
         rfc_number: Normalized RFC number (e.g., "rfc9514")
         output_dir: Path object for output directory
         extra_formats: List of additional formats to download (pdf, text, xml, html)
+        current: Current RFC number in sequence (for progress tracking)
+        total: Total number of RFCs to download (for progress tracking)
 
     Returns:
         Tuple of (primary_file, extra_files_dict) where:
@@ -121,7 +135,9 @@ def download_rfc(rfc_number, output_dir, extra_formats=None):
     xml_file = output_dir / f"rfc{rfc_num}.xml"
     downloaded_file = xml_file
 
-    logger.info(f"Downloading XML from: {xml_url}")
+    # Format progress message if current and total are provided
+    progress_msg = f" ({current}/{total})" if current is not None and total is not None else ""
+    logger.info(f"Downloading RFC {rfc_num}{progress_msg} XML from: {xml_url}")
 
     try:
         response = requests.get(xml_url, timeout=30, stream=True)
@@ -155,7 +171,7 @@ def download_rfc(rfc_number, output_dir, extra_formats=None):
         if e.response.status_code == 404:
             logger.warning(f"RFC XML not found: {rfc_number} (404 error), trying HTML fallback")
             # Try HTML fallback
-            html_file = download_rfc_html(rfc_number, output_dir)
+            html_file = download_rfc_html(rfc_number, output_dir, current, total)
             if html_file:
                 downloaded_file = html_file
             else:
@@ -292,7 +308,7 @@ def download_rfc(rfc_number, output_dir, extra_formats=None):
                 logger.info(f"HTML already downloaded as primary file: {downloaded_file}")
             else:
                 # Download HTML explicitly
-                html_file = download_rfc_html(rfc_number, output_dir)
+                html_file = download_rfc_html(rfc_number, output_dir, current, total)
                 if html_file:
                     extra_files["html"] = html_file
 
@@ -305,6 +321,8 @@ def download_rfc_recursive(
     extra_formats: list[str] | None = None,
     max_depth: int = 1,
     processed: set[str] | None = None,
+    _total_count: int | None = None,
+    _current_count: list[int] | None = None,
 ) -> dict[str, tuple[Path, dict[str, Path]]]:
     """
     Recursively download RFC and all referenced RFCs.
@@ -315,6 +333,8 @@ def download_rfc_recursive(
         extra_formats: List of additional formats to download (pdf, text, xml, html)
         max_depth: Maximum recursion depth (default: 1)
         processed: Set of already processed RFCs (for internal use)
+        _total_count: Total number of RFCs to download (for internal use)
+        _current_count: Current count as a mutable list (for internal use)
 
     Returns:
         Dictionary mapping RFC numbers to tuples of (primary_file, extra_files_dict)
@@ -324,6 +344,10 @@ def download_rfc_recursive(
     # Initialize processed set if not provided
     if processed is None:
         processed = set()
+
+    # Initialize progress tracking on first call
+    if _current_count is None:
+        _current_count = [0]
 
     # Normalize RFC number
     rfc_number = normalize_rfc_number(rfc_number)
@@ -355,13 +379,19 @@ def download_rfc_recursive(
         # For existing files, return empty extra_files dict
         result[rfc_number] = (primary_file, {})
     else:
-        # Download the RFC
-        logger.info(f"Downloading RFC {rfc_number}...")
-        primary_file, extra_files = download_rfc(rfc_number, output_dir, extra_formats)
+        # Increment current count and download the RFC
+        _current_count[0] += 1
+        current = _current_count[0]
 
-        if primary_file is None:
-            logger.error(f"Failed to download RFC {rfc_number}")  # type: ignore[unreachable]
+        # Download the RFC with progress tracking
+        logger.info(f"Downloading RFC {rfc_number}...")
+        download_result = download_rfc(rfc_number, output_dir, extra_formats, current, _total_count)
+
+        if download_result is None:
+            logger.error(f"Failed to download RFC {rfc_number}")
             return result
+
+        primary_file, extra_files = download_result
 
         # Add to result with extra files
         result[rfc_number] = (primary_file, extra_files)
@@ -385,7 +415,13 @@ def download_rfc_recursive(
             for ref_rfc in references:
                 logger.info(f"Found reference to RFC {ref_rfc} (depth {max_depth})")
                 ref_result = download_rfc_recursive(
-                    ref_rfc, output_dir, extra_formats, max_depth - 1, processed
+                    ref_rfc,
+                    output_dir,
+                    extra_formats,
+                    max_depth - 1,
+                    processed,
+                    _total_count,
+                    _current_count,
                 )
                 result.update(ref_result)
 

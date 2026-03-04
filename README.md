@@ -22,6 +22,9 @@ A Python tool to convert RFC (Request for Comments) documents from XML format to
   - References section (Normative and Informative)
   - Appendices
   - Table of Contents
+- **Index Generation**: Optionally generate an index.md file with sorted list of all converted RFCs
+- **Progress Tracking**: Real-time progress logging during download and conversion operations
+- **Local MD Links**: Automatic cross-references to local RFC markdown files in References section
 
 ## Installation
 
@@ -166,6 +169,36 @@ Debug mode and keep XML file:
 python3 rfc2md.py --rfc 9514 --debug --extra xml
 ```
 
+### Generate Index File
+
+Create an index.md file listing all converted RFCs:
+
+```bash
+# Generate index after converting multiple RFCs
+python3 rfc2md.py --rfc 9514 9552 8402 --output-dir downloads --build-index
+
+# Generate index with recursive download
+python3 rfc2md.py --rfc 9514 --recursive --output-dir downloads --build-index
+```
+
+The index.md file will contain:
+- Sorted list of all RFC markdown files in the directory
+- RFC titles extracted from source XML/HTML files (if available)
+- Clickable links to each RFC markdown file
+
+Example index.md:
+```markdown
+# RFC Index
+
+This index contains all RFC documents converted to Markdown format.
+
+- [RFC 8402](rfc8402.md): Segment Routing Architecture
+- [RFC 9514](rfc9514.md): Border Gateway Protocol - Link State (BGP-LS) Extensions
+- [RFC 9552](rfc9552.md): Distribution of Link-State Information
+```
+
+**Note:** The `--build-index` flag cannot be used with custom `--output` filename. It requires using `--output-dir` to specify the directory where the index will be created.
+
 ## Complete Examples
 
 ```bash
@@ -204,6 +237,12 @@ python3 rfc2md.py --rfc 9514 --recursive --debug --extra xml --output-dir output
 
 # Multiple RFCs with recursive download
 python3 rfc2md.py --rfc 9514 9552 --recursive --max-depth 1 --output-dir output
+
+# Convert multiple RFCs and generate index
+python3 rfc2md.py --rfc 9514 9552 8402 --output-dir downloads --build-index
+
+# Recursive download with index generation
+python3 rfc2md.py --rfc 9514 --recursive --output-dir downloads --build-index
 ```
 
 ## Supported RFC XML Version
@@ -265,6 +304,22 @@ The converter generates GitHub Flavored Markdown (GFM) for maximum compatibility
 - GitLab
 - VS Code
 - Most Markdown viewers and editors
+
+### Local MD Links in References
+
+When converting RFCs, the References section includes local markdown links alongside external URLs:
+
+```markdown
+**[RFC9514]** Author, "Title", RFC 9514, January 2024. <https://www.rfc-editor.org/rfc/rfc9514> [Local MD](rfc9514.md)
+```
+
+This allows easy navigation between related RFCs in your local collection. The local MD links are automatically added for all RFC references, making it convenient to browse through interconnected RFCs without leaving your markdown viewer.
+
+**Benefits:**
+- Quick navigation between related RFCs
+- Works offline with your local RFC collection
+- No need to manually create cross-references
+- Automatically generated for all RFC references
 
 ## Known Limitations
 
