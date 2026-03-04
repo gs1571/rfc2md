@@ -146,6 +146,8 @@ def main():
     logger.info(f"Output directory: {output_dir.absolute()}")
 
     # Process RFC
+    rfc_numbers = []  # Initialize to avoid unbound variable warnings
+    
     if args.rfc:
         # args.rfc is now a list, process each RFC
         rfc_numbers = [normalize_rfc_number(rfc) for rfc in args.rfc]
@@ -169,7 +171,7 @@ def main():
         rfc_numbers = sorted(rfc_set)
         logger.info(f"Found {len(rfc_numbers)} RFC(s): {', '.join(rfc_numbers)}")
 
-    else:
+    elif not args.file:
         # This should not happen due to argparse validation, but handle it anyway
         logger.error("No input source specified")
         sys.exit(1)
